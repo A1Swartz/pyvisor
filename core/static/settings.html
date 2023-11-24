@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video Streaming with Flask-SocketIO</title>
+    <script type="text/javascript" charset="utf-8">
+        document.addEventListener("DOMContentLoaded", function() {
+            var config = undefined
+            var createdCategories = []
+            var nestPath = ""
+
+
+            function editValue(name, value) {
+                // Split the string into an array of property names
+                var propertyNames = name.split(',');
+
+                // Dynamically access the property in the object
+                var dynamicValue = propertyNames.reduce(function (obj, propertyName, index, array) {
+                    if (index === array.length - 1) {
+                        // If it's the last property, set a new value
+                        obj[propertyName]["value"] = value;
+                    }
+                    return obj && obj[propertyName];
+                }, config);
+            }
+
+            function writeSettings() {
+                var xhr = new XMLHttpRequest()
+
+                xhr.onload = function() {
+                    console.log(xhr.responseText)
+                }
+
+                xhr.open("POST", "/api/write_settings")
+                xhr.send(JSON.stringify(config))
+            }
+
+            function createParent(parent, parentOfParent) {
+
+                if (createdCategories.includes(parent)) {
+                    return false
+                }
+
+                console.log(createdCategories)
+
+                var v = document.createElement("div")
+                v.id = parent+"-category"
+                v.className = "setting-category"
+
+                var c = document.createElement("h1")
+                c.innerHTML = parent
+                v.appendChild(c)
+
+                if (parentOfParent == undefined) {
+                    document.getElementById("box").appendChild(v)
+                } else {
+                    document.getElementById(parentOfParent).appendChild(v)
+                }
+                createdCategories.push(parent)
+
+                return document.getElementById(parent+"-category")
+            }
+
+            function createSetting(key, parent, js) {
+                var lastParent = parent.length -1
+                if (createdCategories.includes(parent[lastParent])) {
+                    var cDiv = document.createElement("div")
+                    cDiv.className = "setting-item"
+                    
+                    // header of setting
+                    var h1 = document.createElement("h3")
+                    h1.innerHTML = key
+
+                    // description
+                    var p = document.createElement("p")
+                    p.innerHTML = js[key]["description"]
+
+                    // <div class="setting-item-left">
+                    var leftDiv = document.createElement("div")
+                    leftDiv.className = "setting-item-left"
+                    leftDiv.appendChild(h1)
+                    leftDiv.appendChild(p)
+
+                    cDiv.append(leftDiv)
+
+                    // <div class="setting-item-right">
+                    var rightDiv = document.createElement("div")
+                    rightDiv.className = "setting-item-right"
+
+                    var type = js[key]["type"]
+                    if (type == "bool") {
+
+                        // Create label element
+                        const label = document.createElement('label');
+                        label.className = 'switch';
+                        
+
+                        // Create input element
+                        const input = document.createElement('input');
+                        input.type = 'checkbox';
+                        input.checked = js[key].value
+                        input.id = js[key]+"-checkbox"
+
+                        
+                        // Create span element
+                        const span = document.createElement('span');
+                        span.className = 'slider round';
+                        
+                        span.addEventListener("click", function() {
+                            editValue(parent+","+key, !document.getElementById(js[key]+"-checkbox").checked)
+                            console.log(js[key])
+                        })
+
+                        // Append input and span to the label
+                        label.appendChild(input);
+                        label.appendChild(span);
+
+                        rightDiv.appendChild(label)
+                    } else if (type == "str") {
+                        var text = document.createElement("input")
+                        text.value = js[key].value
+                        text.type = "text"
+                        text.id = key+"-value"
+                        
+                        text.addEventListener("input", function() {
+                            editValue(parent+","+key, document.getElementById(key+"-value").value)
+                            console.log(js[key])
+                        })
+
+                        rightDiv.appendChild(text)
+                    } else if (type == "int") {
+                        var text = document.createElement("input")
+                        text.value = js[key].value
+                        text.type = "number"
+                        text.id = key+"-number"
+
+                        text.addEventListener("input", function() {
+                            editValue(parent+","+key, document.getElementById(key+"-number").value)
+                            console.log(js[key])
+                        })
+
+                        rightDiv.appendChild(text)
+                    } else if (type == "list") {
+                        var list = document.createElement("select")
+                        list.value = js[key].value
+                        list.id = key+"-list"
+
+                        list.addEventListener("change", function() {
+                            editValue(parent+","+key, document.getElementById(key+"-list").value)
+                            console.log(js[key])
+                        })
+
+                        for (var i=0; i<js[key]["options"].length; i++) {
+                            var opt = document.createElement("option")
+                            opt.innerHTML = js[key]["options"][i]
+                            list.appendChild(opt)
+                        }
+
+                        rightDiv.appendChild(list)
+                    }
+
+
+                    cDiv.append(rightDiv)
+
+
+                    document.getElementById(parent[lastParent]+"-category").appendChild(cDiv)
+                } else {
+                    for (i=0; i<parent.length; i++) {
+                        if (i-1 == 0) {
+                            if (createdCategories.includes(parent[i-1])) {
+                                createParent(parent[i], parent[i-1]+'-category')
+                            } else {
+                                createParent(parent[i], createParent(parent[i-1], undefined).id)
+                            }
+                        } else {
+                            createParent(parent[i], undefined)
+                        }
+                    }
+
+                    createSetting(key, parent, js)
+                }
+
+
+
+            }
+
+            function parseJson(jsonObject, parent) {
+                var z = parent
+                for (const key in jsonObject) {
+                    if (typeof jsonObject[key] === 'object') {
+                        if (jsonObject[key].hasOwnProperty("value")) {
+                            createSetting(key, parent, jsonObject)
+                        } else {
+                            parseJson(jsonObject[key], parent.concat(key));
+                        }
+                    }
+                }
+            }
+
+            document.getElementById("saveSettings").addEventListener("click", function() {
+                writeSettings()
+            })
+
+            var xhr = new XMLHttpRequest()
+            xhr.onload = function() {
+                config = JSON.parse(xhr.responseText)
+
+                parseJson(config, [])
+            }
+            xhr.open("GET", "/api/dump_settings")
+            xhr.send()
+
+        });
+    </script>
+    <style>
+        /* The switch - the box around the slider */
+        .switch {
+        position: relative;
+        display: inline-block;
+        width: 70px;
+        height: 42px;
+        margin-right: 24px
+        }
+
+        /* Hide default HTML checkbox */
+        .switch input {
+        opacity: 0;
+        width: 0;
+        height: 0;
+        }
+
+        /* The slider */
+        .slider {
+        position: absolute;
+        cursor: pointer;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: #ccc;
+        -webkit-transition: .2s;
+        transition: .2s;
+        }
+
+        .slider:before {
+        position: absolute;
+        content: "";
+        height: 26px;
+        width: 26px;
+        left: 4px;
+        bottom: 4px;
+        background-color: white;
+        -webkit-transition: .4s;
+        transition: .4s;
+        }
+
+        input:checked + .slider {
+        background-color: rgb(44, 0, 127);
+        }
+
+        input:focus + .slider {
+        box-shadow: 0 0 1px rgb(38, 0, 109);
+        }
+
+        input:checked + .slider:before {
+        -webkit-transform: translateX(26px);
+        -ms-transform: translateX(26px);
+        transform: translateX(26px);
+        }
+
+        /* Rounded sliders */
+        .slider.round {
+        border-radius: 34px;
+        }
+
+        .slider.round:before {
+        border-radius: 50%;
+        } 
+    </style>
+    <style>
+
+        body, html {
+            margin: 0;
+            background-color: #181818;
+        }
+
+        h1,h2,h3,h4,h5,h6,p,span {
+            color: white;
+            font-family: monospace;
+            margin: 4px
+        }
+
+        #box {
+            background-color: #181818;
+        }
+
+
+        .settings {
+            float: left;
+            width: 99vw;
+            height: 97.5vh;
+            background-color: #181818;
+            transition: 0.1s ease-in-out;
+            margin-right: -100px
+        }
+
+        .setting-item {
+            width: 95vw;
+            height: 4vh;
+            padding: 14px 6px;
+
+            text-align: left;
+            cursor: pointer;
+            transition: 0.2s;
+            margin: 12px 0;
+            border-radius: 4px;
+            background-color: #222222;
+            display: flex;
+        }
+            .setting-item:hover {
+                background-color: #242424;
+            }
+
+            .setting-item h3,p {
+                padding: 0px 4px;
+            }
+
+        .setting-item-right {
+            float: right;
+            text-align: right;
+            margin-left: auto;
+        }
+
+        .setting-item-left {
+            float: left;
+            text-align: left;
+        }
+
+        .setting-category {
+            width: auto;
+            height: fit-content;
+            padding: 14px 8px;
+            text-align: left;
+            transition: 0.2s;
+            margin: 12px;
+            border-radius: 8px;
+            background-color: #202020;
+        }
+
+        input[type=text], input[type=number] {
+            background-color: #222222;
+            color: white;
+            margin-top: 10px;
+            height: 50%;
+            width: 25vw;
+            border: 2px solid #303030;
+            transition: 0.2s;
+        }
+
+            input[type=number] {
+                width: 5vw;
+            }
+
+
+        select {
+            background-color: #363636 !important;
+            color: white;
+            border-radius: 2px;
+            border-color: #646464;
+            font-family: sans-serif;
+            font-size: 12pt;
+            margin: 8px;
+        } 
+        option {
+            color: white;
+            background-color: #363636 !important;
+            font-family: sans-serif;
+            font-size: 12pt
+        }
+
+        #saveSettings {
+            width: 100%;
+            height: 5vh;
+            background-color: #242424;
+            color: white;
+
+            border: 2px solid #242424;
+            border-radius: 6px;
+
+            font-family: sans-serif;
+            font-size: 12pt;
+
+            transition: .25s;
+
+            cursor:pointer
+
+        }
+            #saveSettings:hover {
+                background-color: #303030;
+            }
+
+            #saveSettings:active {
+                transform: translateY(2px);
+            }
+
+    </style>
+</head>
+<body>
+    <div class="setting-category">
+        <button id="saveSettings">write settings</button>
+    </div>
+    <div class="settings" id="box"></div>
+</body>
+</html>

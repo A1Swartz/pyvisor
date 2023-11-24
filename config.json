@@ -1,0 +1,81 @@
+{
+    "_readme": [
+        "if this looks really complicated to you, dont mess with it",
+        "its meant to be only edited by the python program, but also still meant to be readable",
+        "if you want to edit it anyways due to an issue, heres a simple explanation on how to read this",
+        "some settings is a dict with 3 key pairs - description, type, and value",
+        "description is what the setting changes, type is the type of the value, and value the value (duh)",
+        "some settings have an extra key pair, which is options - the value has to be an option"
+    ],
+    "serial": {
+        "port": {
+            "description": "the port of the virtual HID pico",
+            "type": "str",
+            "value": "COM6"
+        }
+    },
+    "keyboard": {},
+    "video": {
+        "cv2": {
+            "quality": {
+                "description": "the quality of the frames taken by cv2",
+                "type": "int",
+                "value": 75
+            },
+            "resolution": {
+                "description": "the resolution of the frames taken by cv2",
+                "type": "str",
+                "value": "1280x720"
+            },
+            "cvBackend": {
+                "description": "the backend used by cv2 to grab frames",
+                "type": "list",
+                "options": [
+                    "dshow",
+                    "ffmpeg",
+                    "gstreamer",
+                    "v4l"
+                ],
+                "value": "dshow"
+            }
+        },
+        "whip": {
+            "obsNoArgs": {
+                "description": "if the additional arguments on opening obs studio are used",
+                "type": "bool",
+                "value": true
+            },
+            "obsPath": {
+                "description": "the command to run the obs binary",
+                "type": "str",
+                "value": "cd \"C:\\Program Files\\obs-studio\\bin\\64bit\" && obs64.exe"
+            },
+            "mtxPath": {
+                "description": "the command to run the RTC-WHIP server",
+                "type": "str",
+                "value": "powershell -Command \"./mediamtx/mediamtx.exe ./mediamtx/mediamtx.yml\""
+            }
+        },
+        "streamBackend": {
+            "description": "the backend of the stream - aka how it gets to your screen",
+            "type": "list",
+            "options": [
+                "whip",
+                "cv2"
+            ],
+            "value": 0
+        }
+    },
+    "mouse": {
+        "scrollInvert": {
+            "description": "inverts the mouse wheel",
+            "type": "bool",
+            "value": false
+        },
+        "invertMouse": {
+            "description": "inverts mouse movement",
+            "type": "bool",
+            "value": false
+        }
+    }
+}

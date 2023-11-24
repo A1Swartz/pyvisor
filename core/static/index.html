@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video Streaming with Flask-SocketIO</title>
+    <script type="text/javascript" charset="utf-8">
+        document.addEventListener("DOMContentLoaded", function() {
+            var dashHidden = false
+            var dashboardObjects = [
+                "control",
+                "settings"
+            ]
+
+            function selectDash(string) {
+                for (var i=0; dashboardObjects.length; i++) {
+                    document.getElementById(dashboardObjects[i]).className = "dash-item"
+                    if (string == dashboardObjects[i]) {
+                        document.getElementById(dashboardObjects[i]).className = "dash-item selected-dash-item"
+                    }
+                }
+            }
+
+            document.getElementById("hamburger").addEventListener("click", function() {
+                var elem = document.getElementById("dash")
+                var stream = document.getElementById("stream")
+            
+                console.log('click')
+                if (!dashHidden) {
+                    console.log("hid dashboard")
+                    elem.style.transform = "translateX(-250px)";
+                    stream.style.transform = "translateX(-100px)"
+
+                    stream.style.width = "85vw"
+                    stream.style.height = "95vh"
+
+                    dashHidden = true
+                    
+
+                } else {
+                    console.log("unhid dash")
+                    elem.style.transform = "translateX(0px)";
+                    stream.style.transform = "translateX(0px)"
+
+                    stream.style.width = "80vw"
+                    stream.style.height = "90vh"
+
+                    dashHidden = false
+                }
+            })
+
+            document.getElementById("settings").addEventListener("click", function() {
+                document.getElementById("stream").src = "/settings"
+                selectDash("settings")
+            })
+
+            document.getElementById("control").addEventListener("click", function() {
+                document.getElementById("stream").src = "/stream"
+                selectDash("control")
+            })
+        });
+    </script>
+    <style>
+
+        body {
+            margin: 0;
+            background-color: #181818;
+        }
+
+        h1,h2,h3,h4,h5,h6,p,span {
+            color: white;
+            font-family: monospace;
+            margin: 4px
+        }
+
+        iframe {
+            border: none;
+            overflow: hidden;
+            box-sizing: content-box;
+        }
+
+        #hamburger {
+            background: none;
+            border: none;
+            cursor: pointer;
+        }
+
+            #hamburger:hover {
+                background-color: #242424;
+            }
+
+        .stream {
+            height: 90vh;
+            width: 80vw;
+            flex-grow: 1; border: none;
+            margin: 12px 50px;
+            margin-left: 0;
+            float: right;
+            transition: 0.15s ease-in-out;
+        }
+
+        .header {
+            background-color: #202020;
+            padding: 2px 12px;
+        }
+            .header h2 {
+                padding-bottom: 4px;
+                padding-left: 14px;
+            }
+
+        .dashboard {
+            float: left;
+            width: 10%;
+            height: 96vh;
+            background-color: #141414;
+            transition: 0.1s ease-in-out;
+            margin-right: -100px
+        }
+
+        .dash-item {
+            width: 100%;
+            padding: 8px 0;
+            text-align: left;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+            .dash-item:hover {
+                background-color: #222222;
+            }
+
+            .dash-item h3 {
+                padding: 0px 4px;
+            }
+        
+        .selected-dash-item {
+            border-right: 3px solid purple;
+            background-color: #282828;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div style="display: flex">
+            <button id="hamburger">
+                <svg xmlns="http://www.w3.org/2000/svg" height="1.5em" viewBox="0 0 448 512"><!--! Font Awesome Free 6.4.2 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license (Commercial License) Copyright 2023 Fonticons, Inc. --><style>svg{fill:#ffffff}</style><path d="M0 96C0 78.3 14.3 64 32 64H416c17.7 0 32 14.3 32 32s-14.3 32-32 32H32C14.3 128 0 113.7 0 96zM0 256c0-17.7 14.3-32 32-32H416c17.7 0 32 14.3 32 32s-14.3 32-32 32H32c-17.7 0-32-14.3-32-32zM448 416c0 17.7-14.3 32-32 32H32c-17.7 0-32-14.3-32-32s14.3-32 32-32H416c17.7 0 32 14.3 32 32z"/></svg>            </button>
+            <h2>PyVisor</h2>
+        </div>
+    </div>
+
+    <div class="dashboard" id="dash">
+        <div class="dash-item selected-dash-item" id="control">
+            <h3>control</h3>
+        </div>
+        <div class="dash-item" id="settings">
+            <h3>settings</h3>
+        </div>
+    </div>
+
+    <iframe id="stream" src="/stream" height="720" width="1270" class="stream" frameBorder="0">
+    
+</body>
+</html>
