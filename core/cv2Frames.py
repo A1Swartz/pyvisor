@@ -2,18 +2,23 @@ import cv2
 import base64
 
 class cv2_backend:
-    def __init__(self, camera:int=0, backend:str="dshow", resolution:str="1270x720", quality:int=80) -> None:
+    def __init__(self, camera:str="0", backend:str="dshow", resolution:str="1270x720", quality:int=80) -> None:
+
+        try:
+            camera = int(camera)
+        except:
+            pass
 
         if backend == "dshow":
-            video_capture = cv2.VideoCapture(int(camera), cv2.CAP_DSHOW)
+            video_capture = cv2.VideoCapture((camera), cv2.CAP_DSHOW)
         elif backend == "ffmpeg":
-            video_capture = cv2.VideoCapture(int(camera), cv2.CAP_FFMPEG)
+            video_capture = cv2.VideoCapture((camera), cv2.CAP_FFMPEG)
         elif backend == "gstreamer":
-            video_capture = cv2.VideoCapture(int(camera), cv2.CAP_GSTREAMER)
+            video_capture = cv2.VideoCapture((camera), cv2.CAP_GSTREAMER)
         elif backend == "v4l":
-            video_capture = cv2.VideoCapture(int(camera), cv2.CAP_V4L2)
-        elif backend == None:
-            video_capture = cv2.VideoCapture(int(camera))
+            video_capture = cv2.VideoCapture((camera), cv2.CAP_V4L2)
+        elif backend == "auto":
+            video_capture = cv2.VideoCapture((camera))
 
         width, height = resolution.split('x')
         video_capture.set(cv2.CAP_PROP_FRAME_WIDTH, int(width))

@@ -37,6 +37,14 @@ def getValuefromConfig(value):
 def index():
     return open('./core/static/index.html', 'r').read()
 
+@app.route('/hid.js')
+def hidjs():
+    return Response(open('./core/static/js/hid.js', 'r').read(), mimetype="text/javascript")
+
+@app.route('/socket.io.js')
+def socketjs():
+    return Response(open('./core/static/js/socket.io.js', 'r').read(), mimetype="text/javascript")
+
 @app.route('/stream')
 def stream():
     p = "./core/static/streams/"
@@ -61,10 +69,9 @@ def write_settings():
     global config, lastConfigWrite, args
     v = request.get_json(force=True)
 
-    print((datetime.now() - lastConfigWrite).seconds)
-
     if (datetime.now() - lastConfigWrite).seconds > 5:
-        config = json.dumps(v, indent=4)
+        lastConfigWrite = datetime.now()
+        config = v
         with open(args.config, "w") as f:
             f.write(json.dumps(v, indent=4))
             f.flush()
@@ -113,8 +120,6 @@ def handle_mod(key):
     if modifiers[0] == '':
         modifiers = []
 
-    print("[+] set modifiers to {}".format(modifiers))
-
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -137,16 +142,15 @@ if __name__ == "__main__":
     hid = vHID(ser)
 
     # setup streaming
-    backendList = config["video"]["streamBackend"]["options"]
-    if backendList[config["video"]["streamBackend"]["value"]] == "cv2":
-        print('[+] setting up cv2 capture.. (might take a while)')
+    if config["video"]["streamBackend"]["value"] == "cv2":
+        log.info('setting up cv2 capture.. (might take a while)')
 
-        backend = cvBackend.cv2_backend(backend=config["video"]["cv2"]["backend"]["value"],
+        backend = cvBackend.cv2_backend(backend=config["video"]["cv2"]["cvBackend"]["value"],
                               resolution=config["video"]["cv2"]["resolution"]["value"],
                               quality=config["video"]["cv2"]["quality"]["value"],
                               camera=config["video"]["cv2"]["camera"]["value"])
 
-    elif backendList[config["video"]["streamBackend"]["value"]] == "whip":
+    elif config["video"]["streamBackend"]["value"] == "whip":
         backend = "obs"
         log.info("opening obs studio w/ scene \"KVM\"")
         log.warn("anything put in command args aren't used - if you want to edit resolution, etc. do it in OBS studio")

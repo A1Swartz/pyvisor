@@ -14,13 +14,19 @@
             "value": "COM6"
         }
     },
-    "keyboard": {},
+    "keyboard": {
+        "pasteSleep": {
+            "description": "how long the paste should wait between sending another character (in miliseconds)",
+            "type": "int",
+            "value": 50
+        }
+    },
     "video": {
         "cv2": {
             "quality": {
                 "description": "the quality of the frames taken by cv2",
                 "type": "int",
-                "value": 75
+                "value": 80
             },
             "resolution": {
                 "description": "the resolution of the frames taken by cv2",
@@ -34,9 +40,15 @@
                     "dshow",
                     "ffmpeg",
                     "gstreamer",
-                    "v4l"
+                    "v4l",
+                    "auto"
                 ],
                 "value": "dshow"
+            },
+            "camera": {
+                "description": "the camera used by cv2 to grab frames",
+                "type": "str",
+                "value": "0"
             }
         },
         "whip": {
@@ -63,7 +75,7 @@
                 "whip",
                 "cv2"
             ],
-            "value": 0
+            "value": "cv2"
         }
     },
     "mouse": {

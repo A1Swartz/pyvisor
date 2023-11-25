@@ -136,7 +136,7 @@
                         text.id = key+"-number"
 
                         text.addEventListener("input", function() {
-                            editValue(parent+","+key, document.getElementById(key+"-number").value)
+                            editValue(parent+","+key, parseInt(document.getElementById(key+"-number").value))
                             console.log(js[key])
                         })
 

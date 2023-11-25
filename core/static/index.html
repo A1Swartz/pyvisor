@@ -51,11 +51,13 @@
 
             document.getElementById("settings").addEventListener("click", function() {
                 document.getElementById("stream").src = "/settings"
+                document.getElementById("stream").style.width = "82.5vw"
                 selectDash("settings")
             })
 
             document.getElementById("control").addEventListener("click", function() {
                 document.getElementById("stream").src = "/stream"
+                document.getElementById("stream").style.width = "80vw"
                 selectDash("control")
             })
         });
@@ -133,7 +135,7 @@
             }
         
         .selected-dash-item {
-            border-right: 3px solid purple;
+            border-right: 3px solid rgb(44, 0, 127);
             background-color: #282828;
         }
     </style>
