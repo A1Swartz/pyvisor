@@ -1,8 +1,10 @@
 import cv2
 import base64
+import io
+import time
 
 class cv2_backend:
-    def __init__(self, camera:str="0", backend:str="dshow", resolution:str="1270x720", quality:int=80) -> None:
+    def __init__(self, camera:str="0", backend:str="dshow", resolution:str="1280x720", quality:int=80) -> None:
 
         try:
             camera = int(camera)
@@ -28,7 +30,7 @@ class cv2_backend:
         self.cap = video_capture
         self.quality = quality
 
-    def frame(self):
+    def frame(self, _base64=False, _buffer=False):
         """
         generate a single, base64 encoded frame in .webp
         """
@@ -38,9 +40,13 @@ class cv2_backend:
         if not success:
             return False
         
-        _, buffer = cv2.imencode('.webp', frame, [cv2.IMWRITE_WEBP_QUALITY, int(self.quality)])
+        _, buffer = cv2.imencode('.webp', frame, [cv2.IMWRITE_WEBP_QUALITY, 100])
+        #_, buffer = cv2.imencode('.jpg', frame)
 
-        #frame_encoded = base64.b64encode(buffer.tobytes()).decode('utf-8')
-        frame_encoded = base64.b64encode(buffer).decode('utf-8')
+        if _base64:
+            #frame_encoded = base64.b64encode(buffer.tobytes()).decode('utf-8')
+            frame_encoded = base64.b64encode(buffer).decode('utf-8')
 
-        return frame_encoded
+            return frame_encoded
+        else:
+            return io.BytesIO(buffer)

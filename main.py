@@ -1,17 +1,25 @@
+import binascii
+import core.coolPrint as log # for cool console logging
+
+log.info("importing serial backend and cv2..")
 from core.serBackend import vHID, keySerial # hid control
 import core.cv2Frames as cvBackend # custom cv2 backend
 
+log.info("importing flask..")
 from flask import Flask, Response, request # flask webserver 
 from flask_socketio import SocketIO, emit # flask sockets (for cv2 backend, amongst other things)
 
+log.info("importing extras..")
 import argparse # for arguments (doh)
 import threading # for seperate running threads (doh)
 import os # for obs studio opening, amongst other things
 
-import core.coolPrint as log # for cool console logging
 import logging
 import json
 import time
+
+import sys
+import psutil
 
 from datetime import datetime
 
@@ -24,14 +32,15 @@ backend = None
 
 config = None
 lastConfigWrite = datetime.now()
+rebootRequired = False
 
 def frameCallback():
     if backend == "obs": return False
     else:
-        return backend.frame()
-    
-def getValuefromConfig(value):
-    global config
+        frm = backend.frame()
+        data = frm.read()
+        frm.close()
+        return data
 
 @app.route('/')
 def index():
@@ -66,7 +75,7 @@ def dump_settings():
 
 @app.route('/api/write_settings', methods=["POST"])
 def write_settings():
-    global config, lastConfigWrite, args
+    global config, lastConfigWrite, args, rebootRequired
     v = request.get_json(force=True)
 
     if (datetime.now() - lastConfigWrite).seconds > 5:
@@ -76,18 +85,16 @@ def write_settings():
             f.write(json.dumps(v, indent=4))
             f.flush()
 
+        rebootRequired = True
         return Response(json.dumps({"success": True}, indent=4), mimetype="application/json")
     
     else:
         return Response(json.dumps({"success": False, "wait": (datetime.now() - lastConfigWrite).seconds}, indent=4), mimetype="application/json", status=429)
 
-@socketio.on('connect')
-def handle_connect():
-    emit('video_frame', {'image': frameCallback()})
 
 @socketio.on('frame')
 def handle_frame():
-    emit('video_frame', {'image': frameCallback()})
+    emit('video_frame', {"image": frameCallback()})
 
 @socketio.on('keystroke')
 def handle_keystroke(key):
@@ -120,10 +127,39 @@ def handle_mod(key):
     if modifiers[0] == '':
         modifiers = []
 
+def autoReboot():
+    global rebootRequired
+
+    log.info("reboot daemon running in background")
+
+    while True:
+        if rebootRequired:
+            log.warn("rebooting due to config change..")
+
+            try:
+                p = psutil.Process(os.getpid())
+                for handler in p.open_files() + p.connections():
+                    os.close(handler.fd)
+            except Exception as e:
+                logging.error(e)
+
+            python = sys.executable
+            os.execl(python, python, *sys.argv)
+
+        else:
+            time.sleep(0.5)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
+
+    parser.add_argument("--host",
+                        help="ip to host server at",
+                        default="127.0.0.1")
+    
+    parser.add_argument("--port",
+                        help="port to host server at",
+                        default=80, type=int)
 
     parser.add_argument("--config",
                         "-c", help="path to config",
@@ -174,9 +210,13 @@ if __name__ == "__main__":
     try:
         # setup http server
         log.info("setting up flask server..")
+
         fLog = logging.getLogger('werkzeug')
         fLog.setLevel(logging.ERROR)
-        socketio.run(app, debug=False)
+
+        threading.Thread(target=autoReboot, daemon=True).start()
+
+        socketio.run(app, host=args.host, port=args.port, debug=False)
     except KeyboardInterrupt:
         os.system("taskkill /F /IM obs64.exe")
     

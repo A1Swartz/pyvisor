@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Video Streaming with Flask-SocketIO</title>
+    <title>PyVisor</title>
     <script type="text/javascript" charset="utf-8">
         document.addEventListener("DOMContentLoaded", function() {
             var dashHidden = false
@@ -50,12 +50,14 @@
             })
 
             document.getElementById("settings").addEventListener("click", function() {
+                document.getElementById("stream").src = ""
                 document.getElementById("stream").src = "/settings"
                 document.getElementById("stream").style.width = "82.5vw"
                 selectDash("settings")
             })
 
             document.getElementById("control").addEventListener("click", function() {
+                document.getElementById("stream").src = ""
                 document.getElementById("stream").src = "/stream"
                 document.getElementById("stream").style.width = "80vw"
                 selectDash("control")

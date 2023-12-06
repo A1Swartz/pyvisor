@@ -38,19 +38,19 @@ document.addEventListener('DOMContentLoaded', function () {
         };
     };
 
-    function handleMouseMove(event) {
-        // Use movementX and movementY to get cursor movement
+    async function handleMouseMove(event) {
         var movementX = event.movementX || event.mozMovementX || event.webkitMovementX || 0;
         var movementY = event.movementY || event.mozMovementY || event.webkitMovementY || 0;
 
         if (isFullscreen) {
-            // Do something with the movement information
             hidSocket.emit('mouse', `${movementX}|${movementY}`)
+            await sleep(config["mouse"]["samplingRate"])
         }
     }
 
     // click handling
-    document.getElementById("stream").addEventListener('click', function a() {
+    document.getElementById("stream").addEventListener('click', function a(e) {
+        e.preventDefault();
         if (isFullscreen) {
             hidSocket.emit("click", "left")
         } else {
@@ -58,7 +58,8 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     });
 
-    document.getElementById("stream").addEventListener('contextmenu', function a() {
+    document.getElementById("stream").addEventListener('contextmenu', function a(e) {
+        e.preventDefault();
         if (isFullscreen) {
             hidSocket.emit("click", "right")
         } else {
@@ -66,7 +67,8 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     });
 
-    document.getElementById("stream").addEventListener('onauxclick', function a() {
+    document.getElementById("stream").addEventListener('onauxclick', function a(e) {
+        e.preventDefault();
         if (isFullscreen) {
             hidSocket.emit("click", "middle")
         } else {

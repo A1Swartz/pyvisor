@@ -85,23 +85,23 @@ def executeKeystroke(k:str, modifiers:list=[]):
         kbd.press(Keycode.FORWARD_SLASH)
     elif k == "CapsLock":
         kbd.press(Keycode.CAPS_LOCK)
-    elif k == 'PRINT' or k == 'PRINT_SCREEN' or k == 'PRINTSCREEN':
+    elif k == 'PrtScn' or k == 'PRINT_SCREEN' or k == 'PRINTSCREEN':
         kbd.press(Keycode.PRINT_SCREEN)
-    elif k == 'SCROLL' or k == 'SCROLL_LOCK' or k == 'SCROLLLOCK':
+    elif k == 'SCROLL' or k == 'SCROLL_LOCK' or k == 'ScrollLock':
         kbd.press(Keycode.SCROLL_LOCK)
-    elif k == 'PAUSE' or k == 'BREAK':
+    elif k == 'Pause' or k == 'BREAK':
         kbd.press(Keycode.PAUSE)
-    elif k == 'INSERT':
+    elif k == 'Insert':
         kbd.press(Keycode.INSERT)
-    elif k == 'HOME':
+    elif k == 'Home':
         kbd.press(Keycode.HOME)
-    elif k == 'PAGE_UP' or k == 'PAGEUP':
+    elif k == 'PgUp' or k == 'PAGEUP':
         kbd.press(Keycode.PAGE_UP)
-    elif k == 'DELETE':
+    elif k == 'Delete':
         kbd.press(Keycode.DELETE)
-    elif k == 'END':
+    elif k == 'End':
         kbd.press(Keycode.END)
-    elif k == 'PAGE_DOWN' or k == 'PAGEDOWN':
+    elif k == 'PgDown' or k == 'PAGEDOWN':
         kbd.press(Keycode.PAGE_DOWN)
     elif k == 'ArrowRight':
         kbd.press(Keycode.RIGHT_ARROW)

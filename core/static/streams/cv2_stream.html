@@ -3,25 +3,77 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Video Streaming with Flask-SocketIO</title>
+    <title>PyVisor | OpenCV Stream</title>
     <script src="/socket.io.js"></script>
     <script type="text/javascript" charset="utf-8">
         document.addEventListener('DOMContentLoaded', function () {
             var socket = io.connect('http://' + document.domain + ':' + location.port)
+            var recieved = false
+            var img = document.getElementById('video_frame');
+            var failed = false
+            var loadingHidden = false
+            var errs = 0
+            var blobUrl = NaN
+
+            var imgData = NaN // only if we're using <canvas>
+
 
             function sleep(ms) {
                 return new Promise(resolve => setTimeout(resolve, ms));
             }
 
+            function getCurrentTimeWithMilliseconds() {
+                const currentDate = new Date();
+
+                // Get hours, minutes, seconds, and milliseconds
+                const hours = currentDate.getHours().toString().padStart(2, '0');
+                const minutes = currentDate.getMinutes().toString().padStart(2, '0');
+                const seconds = currentDate.getSeconds().toString().padStart(2, '0');
+                const milliseconds = currentDate.getMilliseconds().toString().padStart(3, '0');
+
+                // Concatenate the components to form the time string
+                const formattedTime = `${hours}:${minutes}:${seconds}:${milliseconds}`;
+
+                return formattedTime;
+            }
+
             // frame handling
-            socket.on('video_frame', function (data) {
-                var img = document.getElementById('video_frame');
-                img.src = 'data:image/webp;base64,' + data.image;
-                recieved = true
+            socket.on('video_frame', async function (data) {
+                if (data.image == false) {
+                    errs += 1
+
+                    if (errs > 750) { // over 750 frames dropped
+                        document.getElementById("loadingscreen").style.opacity = "1"
+                        document.getElementById("loadingscreen").style.display = "flex"
+                        document.getElementById("loadinginfo").innerHTML = "the server failed to provide a frame 750 times, which can mean MANY different things - to start, make sure you have the correct video capture device in settings"
+                        failed = true
+                    }
+                } else {
+                    if (!loadingHidden) {
+                        document.getElementById("loadinginfo").innerHTML = "connected enjoy :)"
+                        await sleep(250)
+                        document.getElementById("loadingscreen").style.opacity = "0"
+                        await sleep(250)
+                        document.getElementById("loadingscreen").style.display = "none"
+                        loadingHidden = true
+                    }
+
+                    var img = new Image();
+                    img.onload = function() {
+                        var canvas = document.getElementById('video_frame');
+                        var ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                    }
+                    img.src = URL.createObjectURL(new Blob([data.image], { type: 'image/png' }));
+
+                    console.log(getCurrentTimeWithMilliseconds())
+                }
+
             });
 
             async function main() {
                 while (1) {
+                    if (failed) {break}
                     socket.emit('frame')
                     await sleep(25)
                 }
@@ -34,6 +86,10 @@
 
     <style>
 
+        img {
+            border: none
+        }
+        
         body {
             margin: 0;
         }
@@ -48,11 +104,82 @@
             height: 99vh;
             width: 99vw;
         }
+
+        .blocking {
+            z-index: 1;
+            position: absolute;
+            top: 0;
+            left: 0;
+            padding: 0;
+
+            justify-content: center;
+            text-align: center;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            transition: 0.5s ease-in-out;
+
+            background-color: #141414;
+        }
+            .blocking h2 {
+                color: #343434;
+                font-family: sans-serif;
+                margin: 4px 0;
+                padding: 4px 0;
+            }
+
+        .center {
+            margin: auto;
+            width: 50%;
+            justify-content: center;
+            display: grid;
+        }
+
+        .stack {
+            margin: auto;
+        }
+
+        .loader {
+            border: 16px solid #f3f3f3; /* Light grey */
+            border-top: 16px solid rgb(73, 0, 208);
+            border-radius: 32px;
+            width: 32px;
+            height: 32px;
+            margin-bottom: 12px;
+            animation: spin 1s cubic-bezier( 0.75, 0.4, 0.25, 0.75 ) infinite;
+            
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        @keyframes fadeOut {
+            from {
+                opacity: 1;
+            }
+            to {
+                opacity: 0;
+            }
+        }
     </style>
 </head>
 <body>
+    <div class="blocking" id="loadingscreen">
+        <div class="stack">
+            <div class="center">
+                <div class="loader"></div>
+            </div>
+            <div class="center">
+                <h2 id="loadinginfo">loading</h2>
+            </div>
+        </div>
+    </div>
+
     <div id="stream" class="stream-container">
-        <img id="video_frame" alt="Video Stream" class="stream">
+        <!--<img id="video_frame" class="stream">-->
+        <canvas id="video_frame" class="stream" width="1270" height="720"></canvas>
     </div>
 </body>
 </html>

@@ -11,7 +11,7 @@
         "port": {
             "description": "the port of the virtual HID pico",
             "type": "str",
-            "value": "COM6"
+            "value": "COM5"
         }
     },
     "keyboard": {
@@ -88,6 +88,11 @@
             "description": "inverts mouse movement",
             "type": "bool",
             "value": false
+        },
+        "samplingRate":{
+            "description": "the *DELAY* between each mouse move event, in miliseconds",
+            "type": "int",
+            "value": 25
         }
     }
 }

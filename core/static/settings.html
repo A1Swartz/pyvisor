@@ -143,20 +143,21 @@
                         rightDiv.appendChild(text)
                     } else if (type == "list") {
                         var list = document.createElement("select")
-                        list.value = js[key].value
                         list.id = key+"-list"
-
+                        
                         list.addEventListener("change", function() {
                             editValue(parent+","+key, document.getElementById(key+"-list").value)
                             console.log(js[key])
                         })
-
+                        
                         for (var i=0; i<js[key]["options"].length; i++) {
                             var opt = document.createElement("option")
                             opt.innerHTML = js[key]["options"][i]
+                            opt.value = js[key]["options"][i]
                             list.appendChild(opt)
                         }
-
+                        
+                        list.value = js[key].value
                         rightDiv.appendChild(list)
                     }
 
@@ -256,7 +257,7 @@
         }
 
         input:checked + .slider {
-        background-color: rgb(44, 0, 127);
+        background-color: rgb(73, 0, 208);;
         }
 
         input:focus + .slider {
