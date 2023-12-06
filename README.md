@@ -51,7 +51,7 @@ and your done :) now you can plug in the vnc/sender pi to the host
 
 if you want to use my somewhat-custom-but-shitty protcol (thank you), you can switch `"streamBackend"` in the `config.json` to cv2  
 this requires no dependencies other than cv2 (and gstreamer if you pick that as cv2's backend)  
-be aware that this has the same latency as WHIP, but at a much lower quality
+be aware that this has the same latency as WHIP, but at a much lower framerate (quality good now (wahoo!))
 
 ## using WebRTC WHIP for streaming
 since WHIP is so new, you need obs studio 30.0.0  
