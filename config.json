@@ -11,7 +11,7 @@
         "port": {
             "description": "the port of the virtual HID pico",
             "type": "str",
-            "value": "COM5"
+            "value": "COM8"
         }
     },
     "keyboard": {
@@ -33,6 +33,11 @@
                 "type": "str",
                 "value": "1280x720"
             },
+            "framerate": {
+                "description": "target framerate (24, 30, 60 is best)",
+                "type": "int",
+                "value": 60
+            },
             "cvBackend": {
                 "description": "the backend used by cv2 to grab frames",
                 "type": "list",
@@ -41,6 +46,9 @@
                     "ffmpeg",
                     "gstreamer",
                     "v4l",
+                    "msmf",
+                    "mfx",
+                    "mjpeg",
                     "auto"
                 ],
                 "value": "dshow"
@@ -49,6 +57,11 @@
                 "description": "the camera used by cv2 to grab frames",
                 "type": "str",
                 "value": "0"
+            },
+            "cv2-ng": {
+                "description": "whether to use the new cv2 backend (thanks to vidgear)",
+                "type": "bool",
+                "value": true
             }
         },
         "whip": {
@@ -89,7 +102,7 @@
             "type": "bool",
             "value": false
         },
-        "samplingRate":{
+        "samplingRate": {
             "description": "the *DELAY* between each mouse move event, in miliseconds",
             "type": "int",
             "value": 25

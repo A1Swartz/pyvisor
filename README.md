@@ -1,5 +1,5 @@
 # PyVisor
-a lightweight kvm solution (0.1mb! (54.2mb with mediamtx binaries)) that is meant to be used on the go, without requiring a pi or a kvm switch
+a lightweight kvm solution (0.3mb! ~~(54.2mb with mediamtx binaries)~~) that is meant to be used on the go, without requiring a pi or a kvm switch
 
 works on:
 - laptops
@@ -19,6 +19,9 @@ also the code is a shitshow but it works so enjoy
 ## setup
 ### bake your pies first
 
+for the sender pi, you can either use a pico or a usb-to-ttl converter @ 57600bps  
+
+here's the pi-ttl-converter tutorial anyways - ignore this if your gonna use a usb-to-ttl converter  
 grab one pico and explicitly name it as "sender" (or vnc, or something you can distinguish it by)  
 flash circuitpython 8+ on it, and then put `boot.py` and `main.py` from `./circuitpython/sender`
 
@@ -38,20 +41,20 @@ and your done :) now you can plug in the vnc/sender pi to the host
 
 ### setup the host
 1. install required packages
-    - ```pip install opencv-python flask flask-socketio```
+    - ```pip install opencv-python flask flask-socketio vidgear```
 
-2. grab the latest release version [of mediamtx](https://github.com/bluenviron/mediamtx), and grab the one for your os
-    - just in case mediamtx doesn't exist anymore, the last known version that i know works with pyvisor is bundled in this repo + a config
+2. setup your startup commands in `config.json`, **AND YOUR SERIAL PORT FOR YOUR PI/TTL CONVERTER**
 
-3. setup your startup commands in `config.json`, **AND YOUR SERIAL PORT FOR YOUR PI**
+3. and then `sudo python3 main.py` (or just `python3 main.py` for windows users)  
 
-4. and then `sudo python3 main.py` (or just `python3 main.py` for windows users)  
+**IF YOU WANT TO USE WEBRTC WHIP (which ~~comes default~~ is now depreciated), VIEW BELOW** 
 
-**IF YOU WANT TO USE WEBRTC WHIP (which comes default), VIEW BELOW** 
-
-if you want to use my somewhat-custom-but-shitty protcol (thank you), you can switch `"streamBackend"` in the `config.json` to cv2  
+if you want to use my protcol (thank you), you can switch `"streamBackend"` in the `config.json` to cv2, and turn off cv2-ng  
 this requires no dependencies other than cv2 (and gstreamer if you pick that as cv2's backend)  
-be aware that this has the same latency as WHIP, but at a much lower framerate (quality good now (wahoo!))
+be aware that this has the same latency as WHIP/cv2-ng, but at a lower framerate (quality good now (wahoo!))
+
+cv2-ng is still cv2, but uses vidgear as a backend, which provides EXTREMELY FAST framerates and super low latency  
+i highly recommend using this, and not webrtc
 
 ## using WebRTC WHIP for streaming
 since WHIP is so new, you need obs studio 30.0.0  
@@ -65,11 +68,11 @@ take these steps so PyVisor can automatically start streaming using obs
 6. select `WHIP`
 7. set server as `http://localhost:8889/kvm/whip`
 8. hit `ok`
-9. profit
+9. get mediamtx from their repository, put the binary in `./mediamtx`, and edit the config.json
+10. profit
 
 # contributing
 nobody ever contributes but if you want to go ahead, its the same as always:
 - dont complicate the code
 - dont make it racist
-- dont make it take over the world
 - go ham

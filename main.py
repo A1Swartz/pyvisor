@@ -37,10 +37,8 @@ rebootRequired = False
 def frameCallback():
     if backend == "obs": return False
     else:
-        frm = backend.frame()
-        data = frm.read()
-        frm.close()
-        return data
+        frm = backend.grabFrame(encode=True)
+        return frm
 
 @app.route('/')
 def index():
@@ -127,6 +125,10 @@ def handle_mod(key):
     if modifiers[0] == '':
         modifiers = []
 
+@socketio.on('framerate')
+def handle_fps():
+    emit("fps", {"framerate": backend.fps})
+    
 def autoReboot():
     global rebootRequired
 
@@ -149,6 +151,14 @@ def autoReboot():
         else:
             time.sleep(0.5)
 
+def autoFrameReport():
+    global app
+    ctx = app.test_request_context('/')
+    log.info("started frame daemon")
+    while True:
+        socketio.emit('video_frame', {"image": frameCallback()}, namespace="/")
+        time.sleep(0.001)
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
@@ -165,6 +175,10 @@ if __name__ == "__main__":
                         "-c", help="path to config",
                         default="./config.json")
     
+    parser.add_argument("-d",
+                        "--debug", help="debug mode",
+                        action="store_true", default=False)
+    
     args = parser.parse_args()
 
     # read config
@@ -174,17 +188,17 @@ if __name__ == "__main__":
     # setup vhid
     log.info('setting up keystroke serial..')
     ser = keySerial(config["serial"]["port"]["value"],
-                     baud=9600)
+                     baud=57600)
     hid = vHID(ser)
 
     # setup streaming
     if config["video"]["streamBackend"]["value"] == "cv2":
         log.info('setting up cv2 capture.. (might take a while)')
 
-        backend = cvBackend.cv2_backend(backend=config["video"]["cv2"]["cvBackend"]["value"],
-                              resolution=config["video"]["cv2"]["resolution"]["value"],
-                              quality=config["video"]["cv2"]["quality"]["value"],
-                              camera=config["video"]["cv2"]["camera"]["value"])
+        backend = cvBackend.cv2_backend(config=config["video"]["cv2"], debug=args.debug)
+        
+        backend.autoFrames()
+
 
     elif config["video"]["streamBackend"]["value"] == "whip":
         backend = "obs"
@@ -212,9 +226,10 @@ if __name__ == "__main__":
         log.info("setting up flask server..")
 
         fLog = logging.getLogger('werkzeug')
-        fLog.setLevel(logging.ERROR)
+        fLog.setLevel(logging.CRITICAL)
 
         threading.Thread(target=autoReboot, daemon=True).start()
+        threading.Thread(target=autoFrameReport, daemon=True).start()
 
         socketio.run(app, host=args.host, port=args.port, debug=False)
     except KeyboardInterrupt:

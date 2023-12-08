@@ -1,10 +1,11 @@
 document.addEventListener('DOMContentLoaded', function () {
     var hidSocket = io.connect('http://' + document.domain + ':' + location.port);
-    var oldMouseX = 0
-    var oldMouseY = 0
     var isFullscreen = false
     var activeModifiers = []
     var config = undefined
+    var locked = false
+
+    var mouseScaling = 1.75
 
     function sleep(ms) {
         return new Promise(resolve => setTimeout(resolve, ms));
@@ -18,71 +19,86 @@ document.addEventListener('DOMContentLoaded', function () {
     xhr.send()
     
     // mouse handling
-    document.getElementById("video_frame").addEventListener('mousemove', async function a(evt) {
-        const mPos = getMousePos(evt);
-        var x = Math.round(mPos.x - oldMouseX)
-        var y = Math.round(mPos.y - oldMouseY)
-        
-        //console.log(`Mouse position x:${x}  y:${x}`)
-        hidSocket.emit('mouse', `${x}|${y}`)
-        
-        oldMouseX = mPos.x
-        oldMouseY = mPos.y
-    });
-
-    const getMousePos = (evt) => {
-        const pos = evt.currentTarget.getBoundingClientRect();
-        return {
-            x: Math.round(evt.clientX - pos.left),
-            y: Math.round(evt.clientY - pos.top)
-        };
-    };
-
     async function handleMouseMove(event) {
         var movementX = event.movementX || event.mozMovementX || event.webkitMovementX || 0;
         var movementY = event.movementY || event.mozMovementY || event.webkitMovementY || 0;
 
-        if (isFullscreen) {
-            hidSocket.emit('mouse', `${movementX}|${movementY}`)
-            await sleep(config["mouse"]["samplingRate"])
-        }
+        hidSocket.emit('mouse', `${Math.floor(movementX * mouseScaling)}|${Math.floor(movementY * mouseScaling)}`)
+        await sleep(config["mouse"]["samplingRate"])
     }
 
+    document.getElementById("stream").addEventListener('mouseover', function() {
+        console.log("lock")
+        if (!locked) {
+            document.getElementById("stream").requestPointerLock();
+            locked = true
+        } else {
+            locked = false
+        }
+    })
+
     // click handling
-    document.getElementById("stream").addEventListener('click', function a(e) {
-        e.preventDefault();
-        if (isFullscreen) {
-            hidSocket.emit("click", "left")
-        } else {
-            document.getElementById('stream').requestFullscreen();
-        }
-    });
 
-    document.getElementById("stream").addEventListener('contextmenu', function a(e) {
-        e.preventDefault();
-        if (isFullscreen) {
-            hidSocket.emit("click", "right")
-        } else {
-            document.getElementById('stream').requestFullscreen();
+    document.getElementById("stream").addEventListener("dblclick", function() {
+        document.getElementById('stream').requestFullscreen();
+    })
+    
+    document.getElementById("stream").addEventListener('mousedown', function(e) {
+        clickAnyway = true
+        if (!locked) { // lock if not locked
+            document.getElementById("stream").requestPointerLock();
+            locked = true
+            return // return cause it'll click at a random point if we let it click
         }
-    });
 
-    document.getElementById("stream").addEventListener('onauxclick', function a(e) {
-        e.preventDefault();
-        if (isFullscreen) {
-            hidSocket.emit("click", "middle")
-        } else {
-            document.getElementById('stream').requestFullscreen();
+        if (e.which === 1 || e.button === 0)
+        {
+            if (isFullscreen || clickAnyway) {
+                hidSocket.emit("click", "left")
+            } else {
+                document.getElementById('stream').requestFullscreen();
+            }
         }
-    });
+    
+        if (e.which === 2 || e.button === 1)
+        {
+            console.log('"Middle" at ' + e.clientX + 'x' + e.clientY);
+            if (isFullscreen || clickAnyway) {
+                hidSocket.emit("click", "middle")
+            } else {
+                document.getElementById('stream').requestFullscreen();
+            }
+        }
+    
+        if (e.which === 3 || e.button === 2)
+        {
+            console.log('"Right" at ' + e.clientX + 'x' + e.clientY);
 
+            if (isFullscreen || clickAnyway) {
+                hidSocket.emit("click", "right")
+            } else {
+                document.getElementById('stream').requestFullscreen();
+            }
+
+        }
+    
+        if (e.which === 4 || e.button === 3)
+        {
+            console.log('"Back" at ' + e.clientX + 'x' + e.clientY);
+        }
+    
+        if (e.which === 5 || e.button === 4)
+        {
+            console.log('"Forward" at ' + e.clientX + 'x' + e.clientY);
+        }
+    })
 
 
 
     // scroll handling
     function handleWheel(event) {
         // Access scroll information from the event
-        var delta = (event.deltaY || event.detail || event.wheelDelta)*-1;
+        var delta = Math.floor(((event.deltaY || event.detail || event.wheelDelta)*-1) / 18);
         
         // Do something with the scroll information
         console.log("Scroll delta:", delta);
@@ -106,6 +122,12 @@ document.addEventListener('DOMContentLoaded', function () {
                 activeModifiers.push(e.key.toString()) // append it to active modifiers
                 
                 hidSocket.emit('modifiers', activeModifiers.join(','))
+                try {
+                    document.getElementById('mods').innerHTML = activeModifiers.join(', ')
+                } catch {
+                    console.log("failed to find a 'mods' element")
+                }
+
             }
             return
         } else if (activeModifiers.includes("Control") || activeModifiers.includes("Alt")) {
@@ -158,11 +180,9 @@ document.addEventListener('DOMContentLoaded', function () {
     document.addEventListener('pointerlockchange', function () {
         if (document.pointerLockElement === document.getElementById('stream')) {
             // Cursor is locked, add event listener for movement
-            document.addEventListener('mousemove', handleMouseMove);
             document.addEventListener('wheel', handleWheel)
         } else {
             // Cursor is unlocked, remove event listener for movement
-            document.removeEventListener('mousemove', handleMouseMove);
             document.removeEventListener('wheel', handleWheel);
         }
     });
@@ -179,4 +199,6 @@ document.addEventListener('DOMContentLoaded', function () {
             isFullscreen = false
         }
     });
+
+    document.getElementById('stream').addEventListener('mousemove', handleMouseMove);
 });
