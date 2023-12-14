@@ -62,6 +62,26 @@
                 "description": "whether to use the new cv2 backend (thanks to vidgear)",
                 "type": "bool",
                 "value": true
+            },
+            "splitframes": {
+                "description": "turn frames into tiles, and only update the tiles that changed - in paper, should be way more efficient",
+                "type": "bool",
+                "value": false
+            },
+            "emitOnlyChanges": {
+                "description": "emit frames only when the frame has changed - lower bandwidth usage",
+                "type": "bool",
+                "value": false
+            },
+            "frameMethod": {
+                "description": "method of asking and grabbing frames - daemon is fastest (60fps) but uses most cpu and has most latency, while handshake (~30fps) uses less cpu and has least latency - tiles is a jack of all tradees",
+                "type": "list",
+                "options": [
+                    "daemon",
+                    "handshake",
+                    "tiles"
+                ],
+                "value": "tiles"
             }
         },
         "whip": {
@@ -105,7 +125,7 @@
         "samplingRate": {
             "description": "the *DELAY* between each mouse move event, in miliseconds",
             "type": "int",
-            "value": 25
+            "value": 100
         }
     }
 }

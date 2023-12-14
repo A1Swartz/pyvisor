@@ -2,18 +2,19 @@ document.addEventListener('DOMContentLoaded', function () {
     var hidSocket = io.connect('http://' + document.domain + ':' + location.port);
     var isFullscreen = false
     var activeModifiers = []
-    var config = undefined
     var locked = false
-
+    var noKeyWithMods = false
+    
     var mouseScaling = 1.75
-
+    
     function sleep(ms) {
         return new Promise(resolve => setTimeout(resolve, ms));
     }
-
+    
+    var cfg = undefined
     var xhr = new XMLHttpRequest()
     xhr.onload = function() {
-        config = JSON.parse(xhr.responseText)
+        cfg = JSON.parse(xhr.responseText)
     }
     xhr.open("GET", "/api/dump_settings")
     xhr.send()
@@ -24,11 +25,10 @@ document.addEventListener('DOMContentLoaded', function () {
         var movementY = event.movementY || event.mozMovementY || event.webkitMovementY || 0;
 
         hidSocket.emit('mouse', `${Math.floor(movementX * mouseScaling)}|${Math.floor(movementY * mouseScaling)}`)
-        await sleep(config["mouse"]["samplingRate"])
+        await sleep(cfg["mouse"]["samplingRate"])
     }
 
     document.getElementById("stream").addEventListener('mouseover', function() {
-        console.log("lock")
         if (!locked) {
             document.getElementById("stream").requestPointerLock();
             locked = true
@@ -120,6 +120,9 @@ document.addEventListener('DOMContentLoaded', function () {
         else if (['Meta', 'Control', 'Alt', 'Shift'].includes(e.key.toString())) { // check if its a modifier key
             if (!activeModifiers.includes(e.key.toString())) { // if its not already pressed
                 activeModifiers.push(e.key.toString()) // append it to active modifiers
+
+                noKeyWithMods = true
+                console.log("enabled nokeywmods")
                 
                 hidSocket.emit('modifiers', activeModifiers.join(','))
                 try {
@@ -146,16 +149,23 @@ document.addEventListener('DOMContentLoaded', function () {
                 for (var i=0; i<clipArray.length; i++) {
                     console.log(clipArray[i])
                     hidSocket.emit('keystroke', clipArray[i])
-                    console.log(config["keyboard"]["pasteSleep"]["value"])
-                    await sleep(parseInt(config["keyboard"]["pasteSleep"]["value"]))
+                    console.log(cfg["keyboard"]["pasteSleep"]["value"])
+                    await sleep(parseInt(cfg["keyboard"]["pasteSleep"]["value"]))
                 }
 
                 hidSocket.emit('modifiers', activeModifiers.join(','))
 
                 return
             }
+        } else { // if it's an actual key
+            if (noKeyWithMods) {
+                noKeyWithMods = false;
+                console.log("disabled nokeywmods")
+
+            }
         }
 
+        console.log(e.key.toString())
         hidSocket.emit('keystroke', e.key.toString())
     });
 
@@ -164,7 +174,19 @@ document.addEventListener('DOMContentLoaded', function () {
         e = e || window.event;
 
         if (['Meta', 'Control', 'Alt', 'Shift'].includes(e.key.toString())) {
+            if (noKeyWithMods) {
+                hidSocket.emit('keystroke', e.key.toString())
+                noKeyWithMods = false
+                console.log("disabled nokeywmods due to keyup")
+            }
+
             activeModifiers.pop(e.key.toString())
+
+            try {
+                document.getElementById('mods').innerHTML = activeModifiers.join(', ')
+            } catch {
+                console.log("failed to find a 'mods' element")
+            }
 
             hidSocket.emit('modifiers', activeModifiers.join(','))
 
@@ -172,6 +194,35 @@ document.addEventListener('DOMContentLoaded', function () {
 
         }
     })
+
+    // aux keys handling (counts as keybord i GUESS)
+    function genTopRow() {
+        function generateButton(buttonHTML, keyVal) {
+            var key = document.createElement('button')
+
+            key.innerHTML = buttonHTML
+            key.addEventListener('click', function() {
+                hidSocket.emit('keystroke', keyVal)
+                console.log("keypress")
+            })
+
+            document.getElementById('toprow').appendChild(key)
+        }
+
+        generateButton(`Esc`, 'Escape')
+        for (var f=1; f<13; f++) {
+            generateButton(`F${f}`, `F${f}`)
+        }
+        generateButton(`Del`, 'Delete')
+        generateButton(`Ins`, 'Insert')
+        generateButton(`Home`, 'Home')
+        generateButton(`PgUp`, 'PgUp')
+        generateButton(`PgDn`, 'PgDown')
+        generateButton(`End`, 'End')
+        generateButton(`PrtScn`, 'PrtScn')
+        generateButton(`SLock`, 'ScrollLock')
+        generateButton(`Pause`, 'Pause')
+    }
 
 
 
@@ -199,6 +250,7 @@ document.addEventListener('DOMContentLoaded', function () {
             isFullscreen = false
         }
     });
-
+    
+    genTopRow()
     document.getElementById('stream').addEventListener('mousemove', handleMouseMove);
 });

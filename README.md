@@ -56,6 +56,10 @@ be aware that this has the same latency as WHIP/cv2-ng, but at a lower framerate
 cv2-ng is still cv2, but uses vidgear as a backend, which provides EXTREMELY FAST framerates and super low latency  
 i highly recommend using this, and not webrtc
 
+i also highly reccomend using tiles and not something like daemon, due to the reduced bandwidth usage and cpu usage on both the client and server  
+and thank you [chafey for your libjpeg-turbowasm](https://github.com/chafey/libjpeg-turbojs) build, due to we reduced cpu usage on the client from ~35% to 10%!!  
+now whip is a depreciated option and isn't worth using anymore
+
 ## using WebRTC WHIP for streaming
 since WHIP is so new, you need obs studio 30.0.0  
 take these steps so PyVisor can automatically start streaming using obs  

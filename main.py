@@ -13,14 +13,11 @@ log.info("importing extras..")
 import argparse # for arguments (doh)
 import threading # for seperate running threads (doh)
 import os # for obs studio opening, amongst other things
-
 import logging
 import json
 import time
-
 import sys
 import psutil
-
 from datetime import datetime
 
 app = Flask(__name__)
@@ -33,6 +30,10 @@ backend = None
 config = None
 lastConfigWrite = datetime.now()
 rebootRequired = False
+
+emitting = False
+splitFrames = None
+updateFrames = False
 
 def frameCallback():
     if backend == "obs": return False
@@ -51,6 +52,24 @@ def hidjs():
 @app.route('/socket.io.js')
 def socketjs():
     return Response(open('./core/static/js/socket.io.js', 'r').read(), mimetype="text/javascript")
+
+@app.route('/libjpegturbowasm.js')
+def wasm1():
+    return Response(open('./core/static/js/jpegwasm.js', 'r').read(), mimetype="text/javascript")
+@app.route('/libjpegturbojs.js')
+def wasm2():
+    return Response(open('./core/static/js/jpegwasmjs.js', 'r').read(), mimetype="text/javascript")
+@app.route("/libjpegturbowasm.wasm")
+def wasm3():
+    return Response(open('./core/static/js/jpeg.wasm', 'rb').read(), mimetype="application/wasm")
+
+@app.route('/toastify.js')
+def toastify():
+    return Response(open('./core/static/js/toastify.js', 'r').read(), mimetype="text/javascript")
+
+@app.route('/toastify.css')
+def toastifycss():
+    return Response(open('./core/static/css/toastify.min.css', 'r').read(), mimetype="text/css")
 
 @app.route('/stream')
 def stream():
@@ -92,7 +111,10 @@ def write_settings():
 
 @socketio.on('frame')
 def handle_frame():
-    emit('video_frame', {"image": frameCallback()})
+    frm = frameCallback()
+    if frm == False:
+        return
+    socketio.emit('video_frame', {"image": frm, "len": len(frm)})
 
 @socketio.on('keystroke')
 def handle_keystroke(key):
@@ -128,6 +150,11 @@ def handle_mod(key):
 @socketio.on('framerate')
 def handle_fps():
     emit("fps", {"framerate": backend.fps})
+
+@socketio.on('updatetiles')
+def handle_tiles():
+    global updateFrames
+    updateFrames = True
     
 def autoReboot():
     global rebootRequired
@@ -148,16 +175,188 @@ def autoReboot():
             python = sys.executable
             os.execl(python, python, *sys.argv)
 
-        else:
-            time.sleep(0.5)
+        time.sleep(0.5)
 
 def autoFrameReport():
     global app
     ctx = app.test_request_context('/')
     log.info("started frame daemon")
     while True:
-        socketio.emit('video_frame', {"image": frameCallback()}, namespace="/")
+        frm = backend.grabFrame(encode=True)
+
+        if frm is False:
+            continue
+    
+        socketio.emit('video_frame', {"image": frm, "len": len(frm)}, namespace="/")
         time.sleep(0.001)
+
+def autoChangeReport(split:bool):
+    global app, backend, args, splitNewFrames
+    global updateFrames, oldFrames, onNextCycle, framesReportedNew
+    log.info('started tile change daemon')
+
+    def scanFrames(frames:list, _id=0):
+        global oldFrames, splitNewFrames, onNextCycle, framesReportedNew
+
+        decay = 1 # amount of frames to send AFTER changes are detected
+        # this is to prevent artifacts staying after updates
+
+        changedFrames = {}
+
+        log.info("started thread with id {} managing frames {}".format(x, frames2Manage))
+
+        while True:
+            time.sleep(0.001)
+
+            if oldFrames is None:
+                continue
+
+            if splitNewFrames is None:
+                continue
+            
+            for _index in frames:
+                newFrame = splitNewFrames[_index]
+                oldFrame = oldFrames[_index]
+
+                if backend.detect_changes(newFrame, oldFrame) or onNextCycle:
+                    safeEmit('tileframechange', {
+                        "frameIndex": _index,
+                        "frame": backend.encode(newFrame),
+                        "resolution": [newFrame.shape[1], newFrame.shape[0]],
+                    })
+
+                    if not onNextCycle:
+                        changedFrames[_index] = decay
+                    else:
+                        framesReportedNew += 1
+
+                    oldFrames[_index] = newFrame
+
+                    time.sleep(0.001)
+                elif _index in list(changedFrames):
+                    if changedFrames[_index] == 0:
+                        continue
+
+                    safeEmit('tileframechange', {
+                        "frameIndex": _index,
+                        "frame": backend.encode(newFrame),
+                        "resolution": [newFrame.shape[1], newFrame.shape[0]],
+                    })
+
+                    if changedFrames[_index] == 0:
+                        changedFrames.pop(_index)
+                    else:
+                        changedFrames[_index] -= 1
+
+                    oldFrames[_index] = newFrame
+
+                    time.sleep(0.001)
+
+        
+
+    def safeEmit(channel, data):
+        global emitting
+        
+        if not emitting:
+            emitting = True
+            socketio.emit(channel, data)
+            emitting = False
+        else:
+            while emitting:
+                pass
+
+            emitting = True
+            socketio.emit(channel, data)
+            emitting = False
+
+        time.sleep(0.005)
+
+    oldFrames = None
+    splitNewFrames = None
+    framesReportedNew = 0
+
+    hb = 0
+
+    onNextCycle = False
+
+    if split:
+        start = 0
+        for x in range(4):
+            frames2Manage = [z for z in range(start, start+4)]
+            threading.Thread(target=scanFrames,
+                              args=(frames2Manage,),
+                              kwargs={'_id': x}).start()
+            start += 4
+
+    while True:
+        time.sleep(0.001)
+        if oldFrames is None:
+            frm = backend.grabFrame(encode=False)
+
+            if frm is False:
+                continue
+
+            if split:
+                oldFrames = backend.split_image(frm)
+                backend.frame = None
+            else:
+                oldFrames = frm
+
+
+            continue
+        else:
+            newFrames = backend.grabFrame(encode=False)
+
+            if newFrames is False:
+                continue
+
+            if split:
+                splitNewFrames = backend.split_image(newFrames)
+
+                """
+                for _index in range(len(splitNewFrames)):
+                    newFrame = splitNewFrames[_index]
+                    oldFrame = oldFrames[_index]
+
+                    if backend.detect_changes(newFrame, oldFrame) or onNextCycle:
+                        safeEmit('tileframechange', {
+                            "frameIndex": _index,
+                            "frame": backend.encode(newFrame),
+                            "resolution": [newFrame.shape[1], newFrame.shape[0]],
+                        })
+                        #changedFrames[_index] = decay
+                        oldFrames[_index] = newFrame
+
+                        time.sleep(0.001)
+
+                    elif updateFrames:
+                        oldFrames = None
+                        break
+                        
+
+
+                    oldFrame = None
+                    newFrame = None
+                """
+
+                
+                if onNextCycle: # if we're resending all tiles
+                    if framesReportedNew >= len(splitNewFrames): # to make sure all threads sent their frame
+                        onNextCycle = False # turn it off
+                        framesReportedNew = 0 # reset
+                    else:
+                        ... # pass
+
+                if updateFrames: # if we're supposed to resend all tiles
+                    onNextCycle = True
+
+                updateFrames = False
+            else:
+                if backend.detect_changes(newFrames, oldFrames):
+                    print("change")
+                    socketio.emit('video_frame', {"image": frameCallback()}, namespace="/")
+                    oldFrames = None
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -229,7 +428,11 @@ if __name__ == "__main__":
         fLog.setLevel(logging.CRITICAL)
 
         threading.Thread(target=autoReboot, daemon=True).start()
-        threading.Thread(target=autoFrameReport, daemon=True).start()
+
+        if config["video"]["cv2"]["frameMethod"]["value"] == "tiles":
+            threading.Thread(target=autoChangeReport, args=(True,), daemon=True).start()
+        elif config["video"]["cv2"]["frameMethod"]["value"] == "daemon":
+            threading.Thread(target=autoFrameReport, daemon=True).start()
 
         socketio.run(app, host=args.host, port=args.port, debug=False)
     except KeyboardInterrupt:

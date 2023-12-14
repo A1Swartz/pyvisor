@@ -5,25 +5,44 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PyVisor | OpenCV Stream</title>
     <script src="/socket.io.js"></script>
+    <script src="/libjpegturbowasm.js" type="text/javascript"></script>
+    <script src="/libjpegturbojs.js" type="text/javascript"></script>
     <script type="text/javascript" charset="utf-8">
         document.addEventListener('DOMContentLoaded', function () {
             var socket = io.connect('http://' + document.domain + ':' + location.port)
+            var failed = false // if we failed to load
+            var loadingHidden = false // if the loading screen is hidden yet
+            
+            // TODO: define these
             var recieved = false
-            var failed = false
-            var loadingHidden = false
             var errs = 0
             var blobUrl = NaN
             
+            var startListening = false // whether to start recording and displaying frames
+
+            var imgData = NaN // only if we're using <canvas>
+                
+            // for frame management
+            var framesRecieved = 0
+            const fpsLimit = -1
+            var fps = 0
             var lastGrabbedTime = getSecond()
             var lastGrabbedFrames = 0
             
-            var framesRecieved = 0
-            var imgData = NaN // only if we're using <canvas>
-                
+            // for tile rendering
+            let decoder = undefined
+            var tiledFrames = {}
+            var frameBlob = undefined
 
-            const canvas = document.getElementById('video_frame');
-            const ctx = canvas.getContext('2d');
+            // for fullframe rendering
+            var canvas = undefined
+            var ctx = undefined
+            var img = undefined
+
+            
                 
+            var config = undefined
+
             function sleep(ms) {
                 return new Promise(resolve => setTimeout(resolve, ms));
             }
@@ -49,15 +68,47 @@
                 return currentDate.getSeconds()
             }
 
-            // frame handling
-
-            var img = new Image();
-            img.onload = function() {
-                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-
+            function colorToCanvas(frameInfo, pixelData, imageData) {
+                let outOffset = 0;
+                const bytesPerSample = (frameInfo.bitsPerSample <= 8) ? 1 : 2;
+                let planeSize = frameInfo.width * frameInfo.height * bytesPerSample;
+                let shift = 0;
+                if(frameInfo.bitsPerSample > 8) {
+                shift = 8;
+                }
+                let inOffset = 0;
+            
+                for(var y=0; y < frameInfo.height; y++) {
+                for (var x = 0; x < frameInfo.width; x++) {
+                    imageData.data[outOffset++] = pixelData[inOffset++] >> shift;
+                    imageData.data[outOffset++] = pixelData[inOffset++] >> shift;
+                    imageData.data[outOffset++] = pixelData[inOffset++] >> shift;
+                    imageData.data[outOffset++] = 255;
+                }
+                }
             }
 
+            function getPixelData(frameInfo, decodedBuffer) {
+                if(frameInfo.bitsPerSample > 8) {
+                if(frameInfo.isSigned) {
+                    return new Int16Array(decodedBuffer.buffer, decodedBuffer.byteOffset, decodedBuffer.byteLength / 2);
+                } else {
+                    return new Uint16Array(decodedBuffer.buffer, decodedBuffer.byteOffset, decodedBuffer.byteLength / 2);
+                }
+                } else {
+                return decodedBuffer;
+                }
+            }
+
+            // frame handling
             socket.on('video_frame', async function (data) {
+
+                if (!startListening) {return}
+
+                if (fps > fpsLimit && fpsLimit != -1) {
+                    return // drop tha frame
+                }
+
                 if (data.image == false) {
                     
                     errs += 1
@@ -80,23 +131,133 @@
                         loadingHidden = true
                     }
 
+                    
                     framesRecieved += 1
-                    img.src = URL.createObjectURL(new Blob([data.image], { type: 'image/png' }));
+
+
+                    // blob way
+                    /*
+                    var frameBlob = new Blob([data.image], { type: 'image/png' })
+                    var oldBlob = img.src
+
+                    img.src = URL.createObjectURL(frameBlob)
+
+                    // memory mgmt
+                    URL.revokeObjectURL(oldBlob)
+                    delete frameBlob
+                    */
+
+                    // wasm
+                    var uint = new Uint8Array(data.image)
+                    var encodedBuffer = decoder.getEncodedBuffer(uint.length)
+                    encodedBuffer.set(uint)
+
+                    decoder.decode()
+
+                    var frameInfo = decoder.getFrameInfo()
+                    var decodedBuf = decoder.getDecodedBuffer()
+
+
+
+
+                    const pixelData = getPixelData(frameInfo, decodedBuf);
+
+                    var myImageData = ctx.createImageData(frameInfo.width, frameInfo.height);
+
+                    colorToCanvas(frameInfo, pixelData, myImageData, 2);
+
+                    ctx.putImageData(myImageData, 0, 0);
+                    
                 }
 
             });
+
+            socket.on('framechange', function(data) {
+                socket.emit('frame')
+            })
+
+            socket.on('tileframechange', async function(data) {
+                const drawCoords = tiledFrames[parseInt(data.frameIndex)]
+                var canvasTile = document.getElementById("tile-"+data.frameIndex)
+                var canvasContext = canvasTile.getContext('2d')
+
+
+                // old, img way
+                /*
+                var oldBlob = canvasTile.src
+                var img = drawCoords[2]
+
+                img.onload = function() {
+                    canvasContext.drawImage(img, 0, 0, data.resolution[0], data.resolution[1]);
+                }
+                img.src = URL.createObjectURL(new Blob([data.frame], { type: 'image/jpeg' }));
+        
+                URL.revokeObjectURL(oldBlob)
+                */
+
+                // new, canvas way
+                /*
+                var blob = new Blob([data.frame], { type: 'image/jpeg' })
+                var img = await createImageBitmap(blob)
+
+                canvasContext.drawImage(img, 0, 0, canvasTile.width, canvasTile.height);
+
+                delete blob
+                delete img
+                */
+                
+
+                // newer, wasm way
+
+                var uint = new Uint8Array(data.frame)
+                const encodedBuffer = decoder.getEncodedBuffer(uint.length)
+                encodedBuffer.set(uint)
+
+                decoder.decode()
+
+                var frameInfo = decoder.getFrameInfo()
+                var decodedBuf = decoder.getDecodedBuffer()
+
+
+
+                canvasTile.width = frameInfo.width
+                canvasTile.height = frameInfo.height
+                const pixelData = getPixelData(frameInfo, decodedBuf);
+                var myImageData = canvasContext.createImageData(320, 180);
+
+                colorToCanvas(frameInfo, pixelData, myImageData, 2);
+
+                canvasContext.putImageData(myImageData, 0, 0);
+
+            })
 
             socket.on('fps', function(data) {
                 document.getElementById("sv-fps").innerHTML = `Server FPS: ${Math.floor(parseFloat(data.framerate))}`
                 
                 var time = getSecond()
+                var framesInBT = NaN
 
                 if (time != lastGrabbedTime) {
-                    const framesInBT = framesRecieved+1 - lastGrabbedFrames
+                    framesInBT = framesRecieved+1 - lastGrabbedFrames
 
-                    const fps = framesInBT / (time - lastGrabbedTime)
-                    
-                    document.getElementById("cl-fps").innerHTML = `Client FPS: ${Math.floor(fps)}`
+                    fps = framesInBT / (time - lastGrabbedTime)
+
+                    // while this might seem like its spoofing frames to look good,
+                    // its not. if i were to go the "correct" route and drop frames
+                    // when its over the fps limit, it'll go batshit crazy and not
+                    // actually show the fps counter correctly. this is basically
+                    // putting "trust" that the framebuf will cap at 30, and it will
+
+                    if (fpsLimit != -1) {
+                        var shownFPS = fps 
+                        if (fps > fpsLimit || fps <= 1) {
+                            shownFPS = fpsLimit
+                        }
+                    } else {
+                        shownFPS = fps
+                    }
+
+                    document.getElementById("cl-fps").innerHTML = `Client FPS: ${Math.floor(shownFPS)}`
 
                     lastGrabbedTime = time
                 }
@@ -104,16 +265,118 @@
                 lastGrabbedFrames = framesRecieved
             })
 
-            async function main() {
-                while (1) {
-                    if (failed) {break}
-                    socket.emit('frame')
-                    await sleep(1)
+            // notif handling
+            function showNotif(text) {
+                document.getElementById('notifText').innerHTML = text
+                document.getElementById('notif').style.top = "60px"
+            }
+
+            function hideNotif() {
+                document.getElementById('notifText').innerHTML = ""
+                document.getElementById('notif').style.top = "0"
+            }
+
+            function notifBG(value) {
+                document.getElementById('notif').style.backgroundColor = value
+            }
+
+            async function main(v) {
+                var cvs = document.createElement("canvas")
+                cvs.id = "video_frame"
+                cvs.className = "stream"
+                cvs.width = "1280"
+                cvs.height = "720"
+                document.getElementById('stream').appendChild(cvs)
+
+                canvas = cvs;
+                ctx = cvs.getContext('2d');
+
+                img = new Image();
+                img.onload = function() {
+                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
                 }
+
+                if (v == "handshake") {
+                    setInterval(function() {
+                        if(failed) {return}
+                        socket.emit('frame') 
+                    }, 25)
+                }
+
+                startListening = true
+
             }
             
-            setInterval(function() {socket.emit("framerate")}, 500)
-            //main()
+            function tiles() {
+                var cycles = 0
+                var mult = 128
+                
+                const xySize = [320, 180]
+                for (var yCoord=0; yCoord<4; yCoord++) {
+                    if (cycles == 16) {break}
+
+                    for (var xCoord=0; xCoord<4; xCoord++) {
+
+                        if (cycles == 16) {break}
+                        
+                        var cvs = document.createElement("canvas")
+
+                        cvs.style.borderColor = "1px solid red" // DEBUG
+
+                        cvs.className = "tileCanvas"
+                        cvs.id = "tile-"+cycles.toString()
+                        var cntx = cvs.getContext('2d')
+                        document.getElementById("stream").appendChild(cvs)
+                        
+                        var img = new Image()
+
+                        tiledFrames[cycles.toString()] = [xySize[0]*xCoord, xySize[1]*yCoord, img]
+                        
+                        cycles += 1
+                    }
+                }
+                socket.emit('updatetiles')
+                
+                document.getElementById("loadinginfo").innerHTML = "connected enjoy :)"
+                document.getElementById("loadingscreen").style.opacity = "0"
+                document.getElementById("loadingscreen").style.display = "none"
+                loadingHidden = true
+            }
+            
+            setInterval(function() {
+                if (!socket.connected) {
+                    notifBG("rgba(100, 0, 0, 0.8)")
+                    showNotif("disconnected from server")
+                    failed = true
+                } 
+                socket.emit("framerate")
+            }, 500)
+
+
+            libjpegturbowasm().then(function(libjpegturbo) {
+                console.log('libjpegturbowasm', libjpegturbo);
+                var decoderwasm = new libjpegturbo.JPEGDecoder();
+                decoder = decoderwasm;
+            });
+
+            document.getElementById('notif').style.top = "-30px"
+            //socket.emit('frame')
+
+            var xhr = new XMLHttpRequest()
+            xhr.onload = function() {
+
+                config = JSON.parse(xhr.responseText)
+                var vidType = config["video"]["cv2"]["frameMethod"]["value"]
+                if (vidType == "handshake" || vidType == "daemon") {
+                    main(vidType)
+                } else if (vidType == "tiles") {
+                    tiles()
+                }
+
+            }
+            xhr.open("GET", "/api/dump_settings")
+            xhr.send()
+            
         });
     </script>
     <script src="/hid.js"></script>
@@ -142,6 +405,16 @@
             width: 99vw;
             margin: 0;
             padding: 0;
+        }
+
+        .tileCanvas {
+            width: 25%;
+            height: 25%;
+
+            margin-bottom: -4px;
+
+            box-sizing: border-box;
+
         }
 
         .blocking {
@@ -191,7 +464,7 @@
 
         .infoFooter {
             height: 4vh;
-            width: 100%;
+            width: 99.3%;
             margin: auto;
             background-color: #141414;
             font-family: sans-serif;
@@ -215,6 +488,59 @@
                 user-select: none
             }
 
+        .notif {
+            background-color: #141414;
+            text-align: center;
+            width: 100%;
+            height: 50px;
+
+            position: absolute;
+            margin-top: -60px;
+            left: 0;
+
+            transition: 0.4s ease-out;
+        }
+            #notifText {
+                font-family: monospace;
+                font-weight: bold;
+                font-size: 24px;
+                margin-top: 8px;
+                color: #aaa;
+            }
+
+        button {
+            border-radius: 4px;
+            background: #323232;
+            box-shadow:  1px 1px 1px #080808,
+                        -1px -1px 1px #080808;
+
+            border: #080808;
+            color: #777;
+
+            margin: 4px;
+
+            min-width: 30px;
+            max-width: fit-content;
+            height: 30px;
+
+            cursor:pointer;
+
+            transition: 0.1s ease-in-out;
+        }
+            button:hover {
+                transform: translateY(-1px);
+            }
+
+            button:active {
+                transform: translateY(2px);
+
+            }
+
+        #toprow {
+            width: fit-content;
+            padding-right: 12px
+        }
+
         @keyframes spin {
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
@@ -231,6 +557,10 @@
     </style>
 </head>
 <body>
+    <div class="notif" id="notif">
+        <h3 id="notifText"></h3>
+    </div>
+
     <div class="blocking" id="loadingscreen">
         <div class="stack">
             <div class="center">
@@ -244,24 +574,25 @@
 
     <div id="stream" class="stream-container">
         <!--<img id="video_frame" class="stream">-->
-        <canvas id="video_frame" class="stream" width="1280" height="720"></canvas>
-        <div class="infoFooter">
-            <div class="info">
-                <span id="sv-fps">Server FPS: 0</span>
-                <br>
-                <span id="cl-fps">Client FPS: 0</span>
-            </div>
-            <div class="info">
-                <span>Modifiers:</span>
-                <br>
-                <span id="mods">None</span>
-            </div>
-            <div class="info">
-                <span>Toggle Keys:</span>
-                <br>
-                <span id="toggles">None</span>
-            </div>
+        <!--<canvas id="video_frame" class="stream" width="1280" height="720"></canvas>-->
+    </div>
+    <div class="infoFooter">
+        <div class="info">
+            <span id="sv-fps">Server FPS: 0</span>
+            <br>
+            <span id="cl-fps">Client FPS: 0</span>
         </div>
+        <div class="info" style="width: 15%">
+            <span>Modifiers:</span>
+            <br>
+            <span id="mods">None</span>
+        </div>
+        <div class="info">
+            <span>Toggle Keys:</span>
+            <br>
+            <span id="toggles">None</span>
+        </div>
+        <div class="info" id="toprow"></div>
     </div>
 </body>
 </html>

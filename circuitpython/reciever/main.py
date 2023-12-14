@@ -48,7 +48,10 @@ def executeKeystroke(k:str, modifiers:list=[]):
             kbd.press(Keycode.LEFT_SHIFT)
 
     if len(k) == 1:
-        layout.write(k[0])
+        try:
+            kbd.press(int(k))
+        except:
+            layout.write(k[0])
     elif k == 'Enter':
         kbd.press(Keycode.ENTER)
     elif k == 'Escape':

@@ -5,7 +5,12 @@ import threading
 from vidgear.gears import CamGear
 import core.coolPrint as log
 import logging
-import sys
+from numba import njit
+
+
+@njit
+def njit_encode(frame):
+    return cv2.imencode(".jpeg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), 75])[-1].tobytes()
 
 class cv2_backend:
 
@@ -118,7 +123,64 @@ class cv2_backend:
         if not encode:
             return frm
         else:
-            return cv2.imencode(".jpeg", frm, [int(cv2.IMWRITE_JPEG_QUALITY), 75])[-1].tobytes()
+            return self.encode(frm)
+        
+    def encode(self, frame):
+        return cv2.imencode(".jpeg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), 75])[-1].tobytes()
+        
+    def split_image(self, image):
+        """
+        Splits an image into 16 equal sub-images.
+        Args:
+            image: The image to split.
+        Returns:
+            A list of 16 sub-images.
+        """
+
+        height, width = image.shape[:2]
+        sub_height = height // 4
+        sub_width = width // 4
+        sub_images = []
+        for y in range(4):
+            for x in range(4):
+                sub_image = image[y * sub_height:(y + 1) * sub_height, x * sub_width:(x + 1) * sub_width]
+                sub_images.append(sub_image)
+
+        return sub_images
+    
+    def detect_changes(self, sub_image, previous_sub_image):
+        """
+        Detects changes between two sub-images.
+        Args:
+            sub_image: The current sub-image.
+            previous_sub_image: The previous sub-image.
+        Returns:
+            True if changes were detected, False otherwise.
+        """
+        # Convert to grayscale
+
+        if sub_image.shape[-1] == 1:
+            print("Image is already grayscale")
+            grayscale_sub_image = sub_image
+        else:
+            grayscale_sub_image = cv2.cvtColor(sub_image, cv2.COLOR_BGR2GRAY)
+
+        if previous_sub_image.shape[-1] == 1:
+            grayscale_previous_sub_image = previous_sub_image
+        else:
+            grayscale_previous_sub_image = cv2.cvtColor(previous_sub_image, cv2.COLOR_BGR2GRAY)
+
+        # Calculate absolute difference
+        difference_image = cv2.absdiff(grayscale_sub_image, grayscale_previous_sub_image)
+
+        # Threshold the difference image
+        thresh = cv2.threshold(difference_image, 10, 255, cv2.THRESH_BINARY)[1]
+
+        # Count non-zero pixels in the thresholded image
+        non_zero_pixels = cv2.countNonZero(thresh)
+
+        # If there are enough non-zero pixels, consider it a change
+        return non_zero_pixels >= 100
     
     def setFrame(self):
         """
