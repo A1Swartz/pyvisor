@@ -1,6 +1,9 @@
 # PyVisor
 a lightweight kvm solution (0.3mb! ~~(54.2mb with mediamtx binaries)~~) that is meant to be used on the go, without requiring a pi or a kvm switch
+***
+![image](https://github.com/whatotter/pyvisor/assets/42103041/2f20c7ed-3a89-4081-abec-554d93af08d8)
 
+***
 works on:
 - laptops
 - linux hosts
