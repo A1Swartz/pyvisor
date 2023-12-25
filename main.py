@@ -34,6 +34,7 @@ rebootRequired = False
 emitting = False
 splitFrames = None
 updateFrames = False
+frameSplit = 4
 
 def frameCallback():
     if backend == "obs": return False
@@ -107,6 +108,20 @@ def write_settings():
     
     else:
         return Response(json.dumps({"success": False, "wait": (datetime.now() - lastConfigWrite).seconds}, indent=4), mimetype="application/json", status=429)
+
+@app.route("/api/splitframeinfo")
+def getSplitInfo():
+    global backend, frameSplit
+
+    frm = backend.grabFrame(encode=False)
+    spFrame = backend.split_image(frm, split=frameSplit)[0]
+
+    a = {
+        "resolution": [spFrame.shape[1], spFrame.shape[0]],
+        "splitby": frameSplit
+    }
+
+    return Response(json.dumps(a, indent=4), mimetype="application/json")
 
 
 @socketio.on('frame')
@@ -190,20 +205,20 @@ def autoFrameReport():
         socketio.emit('video_frame', {"image": frm, "len": len(frm)}, namespace="/")
         time.sleep(0.001)
 
-def autoChangeReport(split:bool):
+def autoChangeReport(split:bool, frameSplit=frameSplit):
     global app, backend, args, splitNewFrames
     global updateFrames, oldFrames, onNextCycle, framesReportedNew
     log.info('started tile change daemon')
 
     def scanFrames(frames:list, _id=0):
-        global oldFrames, splitNewFrames, onNextCycle, framesReportedNew
+        global oldFrames, splitNewFrames, onNextCycle, framesReportedNew, frameSplit
 
-        decay = 1 # amount of frames to send AFTER changes are detected
+        decay = round((1*frameSplit)/2) # amount of frames to send AFTER changes are detected
         # this is to prevent artifacts staying after updates
 
         changedFrames = {}
 
-        log.info("started thread with id {} managing frames {}".format(x, frames2Manage))
+        log.info("started thread with id {} managing frames {} ({} frames)".format(_id, frames2Manage, len(frames2Manage)))
 
         while True:
             time.sleep(0.001)
@@ -215,10 +230,13 @@ def autoChangeReport(split:bool):
                 continue
             
             for _index in frames:
-                newFrame = splitNewFrames[_index]
-                oldFrame = oldFrames[_index]
+                try:
+                    newFrame = splitNewFrames[_index]
+                    oldFrame = oldFrames[_index]
+                except IndexError:
+                    ...
 
-                if backend.detect_changes(newFrame, oldFrame) or onNextCycle:
+                if cvBackend._detect_changes(newFrame, oldFrame) or onNextCycle:
                     safeEmit('tileframechange', {
                         "frameIndex": _index,
                         "frame": backend.encode(newFrame),
@@ -230,7 +248,10 @@ def autoChangeReport(split:bool):
                     else:
                         framesReportedNew += 1
 
-                    oldFrames[_index] = newFrame
+                    try:
+                        oldFrames[_index] = newFrame
+                    except:
+                        ...
 
                     time.sleep(0.001)
                 elif _index in list(changedFrames):
@@ -248,7 +269,10 @@ def autoChangeReport(split:bool):
                     else:
                         changedFrames[_index] -= 1
 
-                    oldFrames[_index] = newFrame
+                    try:
+                        oldFrames[_index] = newFrame
+                    except:
+                        ...
 
                     time.sleep(0.001)
 
@@ -280,16 +304,27 @@ def autoChangeReport(split:bool):
     onNextCycle = False
 
     if split:
+        tid = 0
         start = 0
-        for x in range(4):
-            frames2Manage = [z for z in range(start, start+4)]
+        framesEachThread = 4
+        amntOfFrames = frameSplit*frameSplit
+        
+        for x in range(0, amntOfFrames, framesEachThread):
+            frames2Manage = []
+            for x in range(start, start+framesEachThread):
+                if amntOfFrames >= x:
+                    frames2Manage.append(x)
+                else:
+                    break
+
             threading.Thread(target=scanFrames,
                               args=(frames2Manage,),
-                              kwargs={'_id': x}).start()
-            start += 4
+                              kwargs={'_id': tid}).start()
+            tid += 1
+            start += framesEachThread
 
     while True:
-        time.sleep(0.001)
+        time.sleep(0.0025)
         if oldFrames is None:
             frm = backend.grabFrame(encode=False)
 
@@ -297,7 +332,7 @@ def autoChangeReport(split:bool):
                 continue
 
             if split:
-                oldFrames = backend.split_image(frm)
+                oldFrames = backend.split_image(frm, split=frameSplit)
                 backend.frame = None
             else:
                 oldFrames = frm
@@ -311,35 +346,8 @@ def autoChangeReport(split:bool):
                 continue
 
             if split:
-                splitNewFrames = backend.split_image(newFrames)
+                splitNewFrames = backend.split_image(newFrames, split=frameSplit)
 
-                """
-                for _index in range(len(splitNewFrames)):
-                    newFrame = splitNewFrames[_index]
-                    oldFrame = oldFrames[_index]
-
-                    if backend.detect_changes(newFrame, oldFrame) or onNextCycle:
-                        safeEmit('tileframechange', {
-                            "frameIndex": _index,
-                            "frame": backend.encode(newFrame),
-                            "resolution": [newFrame.shape[1], newFrame.shape[0]],
-                        })
-                        #changedFrames[_index] = decay
-                        oldFrames[_index] = newFrame
-
-                        time.sleep(0.001)
-
-                    elif updateFrames:
-                        oldFrames = None
-                        break
-                        
-
-
-                    oldFrame = None
-                    newFrame = None
-                """
-
-                
                 if onNextCycle: # if we're resending all tiles
                     if framesReportedNew >= len(splitNewFrames): # to make sure all threads sent their frame
                         onNextCycle = False # turn it off
@@ -377,6 +385,10 @@ if __name__ == "__main__":
     parser.add_argument("-d",
                         "--debug", help="debug mode",
                         action="store_true", default=False)
+                       
+    parser.add_argument("-nkb",
+                        help="no keyboard mode",
+                        action="store_true", default=False)
     
     args = parser.parse_args()
 
@@ -387,7 +399,7 @@ if __name__ == "__main__":
     # setup vhid
     log.info('setting up keystroke serial..')
     ser = keySerial(config["serial"]["port"]["value"],
-                     baud=57600)
+                     baud=115200, isFake=args.nkb)
     hid = vHID(ser)
 
     # setup streaming
@@ -425,12 +437,12 @@ if __name__ == "__main__":
         log.info("setting up flask server..")
 
         fLog = logging.getLogger('werkzeug')
-        fLog.setLevel(logging.CRITICAL)
+        #fLog.setLevel(logging.ERROR)
 
         threading.Thread(target=autoReboot, daemon=True).start()
 
         if config["video"]["cv2"]["frameMethod"]["value"] == "tiles":
-            threading.Thread(target=autoChangeReport, args=(True,), daemon=True).start()
+            threading.Thread(target=autoChangeReport, args=(True,), kwargs={"frameSplit": frameSplit}, daemon=True).start()
         elif config["video"]["cv2"]["frameMethod"]["value"] == "daemon":
             threading.Thread(target=autoFrameReport, daemon=True).start()
 

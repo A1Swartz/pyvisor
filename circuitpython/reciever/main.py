@@ -14,14 +14,18 @@ rx_pin = board.GP8  # Receive pin
 tx_pin = board.GP9  # Transmit pin
 
 # Initialize the UART (Serial) communication
-uart = busio.UART(rx_pin, tx_pin, baudrate=57600)
+uart = busio.UART(rx_pin, tx_pin, baudrate=115200)
 led = digitalio.DigitalInOut(board.LED)
 led.direction = digitalio.Direction.OUTPUT
 
 try:
     kbd = Keyboard(usb_hid.devices)
     layout = KeyboardLayoutUS(kbd)
+    
     mouse = Mouse(usb_hid.devices)
+    mouse.report_descriptor = b'\x05\x01\x09\x02\xA1\x01\x09\x01\xA1\x00\x05\x09\x19\x01\x29\x03\x15\x00\x25\x01\x95\x07\x75\x01\x81\x02\x95\x01\x75\x08\x81\x01\x05\x01\x09\x30\x09\x31\x15\x81\x25\x7F\x75\x08\x95\x02\x81\x06\x05\x0C\x09\x48\x15\x81\x25\x7F\x75\x08\x95\x01\x81\x06\xC0\xC0'
+
+
 except:
     raise
 
@@ -48,10 +52,7 @@ def executeKeystroke(k:str, modifiers:list=[]):
             kbd.press(Keycode.LEFT_SHIFT)
 
     if len(k) == 1:
-        try:
-            kbd.press(int(k))
-        except:
-            layout.write(k[0])
+        layout.write(k[0])
     elif k == 'Enter':
         kbd.press(Keycode.ENTER)
     elif k == 'Escape':
@@ -184,7 +185,10 @@ if __name__ == "__main__":
             
             try:
                 # parse mouse
-                mouse.move(int(jData["mouse"]["x"]), int(jData["mouse"]["y"]), int(jData["scroll"]))
+                mouse.move(x=int(jData["mouse"]["x"]), y=int(jData["mouse"]["y"]))
+
+                # parse scroll
+                mouse.move(0, 0, int(jData["scroll"]))
 
                 # parse mouse clicks
                 for x in jData["mouseButtons"]:

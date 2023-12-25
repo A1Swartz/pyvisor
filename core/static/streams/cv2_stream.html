@@ -31,6 +31,7 @@
             
             // for tile rendering
             let decoder = undefined
+            let encoder = undefined
             var tiledFrames = {}
             var frameBlob = undefined
 
@@ -85,6 +86,22 @@
                     imageData.data[outOffset++] = pixelData[inOffset++] >> shift;
                     imageData.data[outOffset++] = 255;
                 }
+                }
+            }
+
+            function colorToCanvas2(frameInfo, pixelData, imageData) {
+                const bytesPerSample = frameInfo.bitsPerSample <= 8 ? 1 : 2;
+                let shift = frameInfo.bitsPerSample > 8 ? 8 : 0;
+                const four = 4;
+                const three = 3;
+
+                const clmp = new Uint8ClampedArray(imageData.data.buffer);
+
+                for (let i = 0, outOffset = 0, inOffset = 0; i < frameInfo.height * frameInfo.width * four; i += four) {
+                    clmp[outOffset++] = pixelData[inOffset++] >> shift;
+                    clmp[outOffset++] = pixelData[inOffset++] >> shift;
+                    clmp[outOffset++] = pixelData[inOffset++] >> shift;
+                    clmp[outOffset++] = 255;
                 }
             }
 
@@ -179,56 +196,29 @@
             socket.on('tileframechange', async function(data) {
                 const drawCoords = tiledFrames[parseInt(data.frameIndex)]
                 var canvasTile = document.getElementById("tile-"+data.frameIndex)
-                var canvasContext = canvasTile.getContext('2d')
+                var xRes = data.resolution[0]
+                var yRes = data.resolution[1]
 
 
-                // old, img way
-                /*
-                var oldBlob = canvasTile.src
-                var img = drawCoords[2]
-
-                img.onload = function() {
-                    canvasContext.drawImage(img, 0, 0, data.resolution[0], data.resolution[1]);
-                }
-                img.src = URL.createObjectURL(new Blob([data.frame], { type: 'image/jpeg' }));
-        
-                URL.revokeObjectURL(oldBlob)
-                */
-
-                // new, canvas way
-                /*
-                var blob = new Blob([data.frame], { type: 'image/jpeg' })
-                var img = await createImageBitmap(blob)
-
-                canvasContext.drawImage(img, 0, 0, canvasTile.width, canvasTile.height);
-
-                delete blob
-                delete img
-                */
+                // decode jpeg, display it 2d (no gpu accel)
                 
-
-                // newer, wasm way
-
-                var uint = new Uint8Array(data.frame)
-                const encodedBuffer = decoder.getEncodedBuffer(uint.length)
-                encodedBuffer.set(uint)
+                var canvasContext = canvasTile.getContext('2d')
+                var decodeUINT = new Uint8Array(data.frame)
+                const encodedBuffer = decoder.getEncodedBuffer(decodeUINT.length)
+                encodedBuffer.set(decodeUINT)
 
                 decoder.decode()
 
-                var frameInfo = decoder.getFrameInfo()
+                var decodedframeInfo = decoder.getFrameInfo()
                 var decodedBuf = decoder.getDecodedBuffer()
 
+                const pixelData = getPixelData(decodedframeInfo, decodedBuf);
+                var myImageData = canvasContext.createImageData(xRes, yRes);
 
+                colorToCanvas2(decodedframeInfo, pixelData, myImageData, 2);
 
-                canvasTile.width = frameInfo.width
-                canvasTile.height = frameInfo.height
-                const pixelData = getPixelData(frameInfo, decodedBuf);
-                var myImageData = canvasContext.createImageData(320, 180);
-
-                colorToCanvas(frameInfo, pixelData, myImageData, 2);
-
-                canvasContext.putImageData(myImageData, 0, 0);
-
+                canvasContext.putImageData(myImageData, 0, 0);  
+                
             })
 
             socket.on('fps', function(data) {
@@ -311,36 +301,52 @@
                 var cycles = 0
                 var mult = 128
                 
-                const xySize = [320, 180]
-                for (var yCoord=0; yCoord<4; yCoord++) {
-                    if (cycles == 16) {break}
+                var xhr = new XMLHttpRequest()
+                xhr.onload = function() {
+                    var data = JSON.parse(xhr.responseText)
+                    const xySize = data.resolution
+                    const splitBy = parseInt(data.splitby)
 
-                    for (var xCoord=0; xCoord<4; xCoord++) {
+                    var tilePercent = (100/splitBy)
 
-                        if (cycles == 16) {break}
-                        
-                        var cvs = document.createElement("canvas")
+                    for (var yCoord=0; yCoord<splitBy; yCoord++) {
+                        if (cycles == (splitBy*splitBy)) {break}
+    
+                        for (var xCoord=0; xCoord<splitBy; xCoord++) {
+    
+                            if (cycles == (splitBy*splitBy)) {break}
+                            
+                            var cvs = document.createElement("canvas")
+    
+                            cvs.style.borderColor = "1px solid red" // DEBUG
+    
+                            cvs.className = "tileCanvas"
+                            cvs.id = "tile-"+cycles.toString()
 
-                        cvs.style.borderColor = "1px solid red" // DEBUG
+                            cvs.style.height = `${tilePercent}%`
+                            cvs.style.width = `${tilePercent}%`
+                            cvs.width = xySize[0]
+                            cvs.height = xySize[1]
 
-                        cvs.className = "tileCanvas"
-                        cvs.id = "tile-"+cycles.toString()
-                        var cntx = cvs.getContext('2d')
-                        document.getElementById("stream").appendChild(cvs)
-                        
-                        var img = new Image()
-
-                        tiledFrames[cycles.toString()] = [xySize[0]*xCoord, xySize[1]*yCoord, img]
-                        
-                        cycles += 1
+                            document.getElementById("stream").appendChild(cvs)
+                            
+                            var img = new Image()
+    
+                            tiledFrames[cycles.toString()] = [xySize[0]*xCoord, xySize[1]*yCoord, img]
+                            
+                            cycles += 1
+                        }
                     }
+                    socket.emit('updatetiles')
+                    
+                    document.getElementById("loadinginfo").innerHTML = "connected enjoy :)"
+                    document.getElementById("loadingscreen").style.opacity = "0"
+                    document.getElementById("loadingscreen").style.display = "none"
+                    loadingHidden = true
                 }
-                socket.emit('updatetiles')
-                
-                document.getElementById("loadinginfo").innerHTML = "connected enjoy :)"
-                document.getElementById("loadingscreen").style.opacity = "0"
-                document.getElementById("loadingscreen").style.display = "none"
-                loadingHidden = true
+                xhr.open("GET", "/api/splitframeinfo")
+                xhr.send()
+
             }
             
             setInterval(function() {
@@ -348,8 +354,8 @@
                     notifBG("rgba(100, 0, 0, 0.8)")
                     showNotif("disconnected from server")
                     failed = true
+                    socket.close()
                 } 
-                socket.emit("framerate")
             }, 500)
 
 
@@ -357,6 +363,9 @@
                 console.log('libjpegturbowasm', libjpegturbo);
                 var decoderwasm = new libjpegturbo.JPEGDecoder();
                 decoder = decoderwasm;
+
+                var encoderwasm = new libjpegturbo.JPEGEncoder();
+                encoder = encoderwasm;
             });
 
             document.getElementById('notif').style.top = "-30px"
@@ -401,16 +410,13 @@
             padding: 0;
         }
         .stream-container {
-            height: 95vh;
-            width: 99vw;
+            width: 1280px;
+            height: 720px;
             margin: 0;
             padding: 0;
         }
 
         .tileCanvas {
-            width: 25%;
-            height: 25%;
-
             margin-bottom: -4px;
 
             box-sizing: border-box;
@@ -463,13 +469,12 @@
         }
 
         .infoFooter {
-            height: 4vh;
-            width: 99.3%;
+            height: 40px;
+            width: 100%;
             margin: auto;
             background-color: #141414;
             font-family: sans-serif;
             display: flex;
-            margin-left: -4px;
 
         }
         
@@ -541,6 +546,40 @@
             padding-right: 12px
         }
 
+
+        @media (max-width:1280px) {
+            .stream-container {
+                width: 960px;
+                height: 540px;
+            }
+
+            .infoFooter {
+                width: 960px;
+            }
+        }
+
+        @media (max-width:1920px) {
+            .stream-container {
+                width: 1280px;
+                height: 720px;
+            }
+
+            .infoFooter {
+                width: 1280px;
+            }
+        }
+
+        @media (max-width:2560px) {
+            .stream-container {
+                width: 1600px;
+                height: 900px;
+            }
+
+            .infoFooter {
+                width: 1600px;
+            }
+        }
+
         @keyframes spin {
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
@@ -593,6 +632,11 @@
             <span id="toggles">None</span>
         </div>
         <div class="info" id="toprow"></div>
+        <div class="info">
+            <span>Display Resolution:</span>
+            <br>
+            <span id="res">0x0</span>
+        </div>
     </div>
 </body>
 </html>

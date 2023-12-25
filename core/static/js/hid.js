@@ -15,16 +15,39 @@ document.addEventListener('DOMContentLoaded', function () {
     var xhr = new XMLHttpRequest()
     xhr.onload = function() {
         cfg = JSON.parse(xhr.responseText)
+        genTopRow()
     }
     xhr.open("GET", "/api/dump_settings")
     xhr.send()
     
     // mouse handling
     async function handleMouseMove(event) {
-        var movementX = event.movementX || event.mozMovementX || event.webkitMovementX || 0;
-        var movementY = event.movementY || event.mozMovementY || event.webkitMovementY || 0;
 
-        hidSocket.emit('mouse', `${Math.floor(movementX * mouseScaling)}|${Math.floor(movementY * mouseScaling)}`)
+        // absolute
+        /*
+        var rect = document.getElementById("stream").getBoundingClientRect();
+
+        var canvasWidth = document.getElementById("stream").scrollWidth
+        var canvasHeight = document.getElementById("stream").scrollHeight
+
+        var imageWidth = parseInt(cfg["video"]["cv2"]["resolution"]["value"].split("x")[0])
+        var imageHeight = parseInt(cfg["video"]["cv2"]["resolution"]["value"].split("x")[1])
+
+        var xScale = imageWidth/canvasWidth
+        var yScale = imageHeight/canvasHeight
+
+        var x = event.clientX - rect.left; //x position within the element.
+        var y = event.clientY - rect.top;  //y position within the element.
+        */
+
+        // relative
+        var x = event.movementX || event.mozMovementX || event.webkitMovementX || 0;
+        var y = event.movementY || event.mozMovementY || event.webkitMovementY || 0;
+
+        var xScale = 3
+        var yScale = 3
+
+        hidSocket.emit('mouse', `${Math.floor(x*xScale)}|${Math.floor(y*yScale)}`)
         await sleep(cfg["mouse"]["samplingRate"])
     }
 
@@ -214,14 +237,12 @@ document.addEventListener('DOMContentLoaded', function () {
             generateButton(`F${f}`, `F${f}`)
         }
         generateButton(`Del`, 'Delete')
-        generateButton(`Ins`, 'Insert')
-        generateButton(`Home`, 'Home')
-        generateButton(`PgUp`, 'PgUp')
-        generateButton(`PgDn`, 'PgDown')
-        generateButton(`End`, 'End')
-        generateButton(`PrtScn`, 'PrtScn')
-        generateButton(`SLock`, 'ScrollLock')
-        generateButton(`Pause`, 'Pause')
+
+        try {
+            document.getElementById("res").innerHTML = cfg["video"]["cv2"]["resolution"]["value"]
+        } catch {
+            console.error("couldn't set resolution info")
+        }
     }
 
 
@@ -251,6 +272,5 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     });
     
-    genTopRow()
     document.getElementById('stream').addEventListener('mousemove', handleMouseMove);
 });

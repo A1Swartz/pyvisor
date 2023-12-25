@@ -8,17 +8,21 @@ class keySerial:
     a class that manages the serial HID bridge
     """
 
-    def __init__(self, port, baud=115200) -> None:
+    def __init__(self, port, baud=115200, isFake=False) -> None:
         self.port = port
-        self.serial = serial.Serial(port, baudrate=baud)
+        if not isFake:
+            self.serial = serial.Serial(port, baudrate=baud)
+        else :
+            self.serial = None
         pass
 
     def stringSend(self, string:str):
         """
         sends a string over the serial wire
         """
-
-        self.serial.write((string+"\r\n").encode('ascii'))
+        
+        if self.serial is not None:
+            self.serial.write((string+"\r\n").encode('ascii'))
         return True
     
     def readline(self):
@@ -26,6 +30,7 @@ class keySerial:
         reads a line from serial wire
         """
 
+        if self.serial == None: return None
         return self.serial.readline().decode('ascii')
     
 class vHID:

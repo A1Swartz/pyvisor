@@ -5,12 +5,39 @@ import threading
 from vidgear.gears import CamGear
 import core.coolPrint as log
 import logging
-from numba import njit
 
+import numba as nb
+import numpy as np
 
-@njit
-def njit_encode(frame):
-    return cv2.imencode(".jpeg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), 75])[-1].tobytes()
+@nb.jit(forceobj=True)
+def convertGrayscale(image1, image2):
+    # Optimized grayscale conversion
+    gimage1 = cv2.merge([image1[:, :, 0]])  # Direct memory access
+    gimage2 = cv2.merge([image2[:, :, 0]])
+
+    return [gimage1, gimage2]
+
+@nb.jit(forceobj=True)
+def _detect_changes(sub_image, previous_sub_image):
+    """
+    Detects changes between two sub-images.
+    Args:
+        sub_image: The current sub-image.
+        previous_sub_image: The previous sub-image.
+    Returns:
+        True if changes were detected, False otherwise.
+    """
+
+    # Optimized grayscale conversion
+    grayscale_sub_image, grayscale_previous_sub_image = convertGrayscale(sub_image, previous_sub_image)
+
+    # Optimized difference calculation using NumPy
+    difference_image = np.abs(grayscale_sub_image.astype(np.int32) - grayscale_previous_sub_image.astype(np.int32))
+
+    # Combined thresholding and counting
+    non_zero_pixels = np.count_nonzero(difference_image > 10)
+
+    return non_zero_pixels >= 1
 
 class cv2_backend:
 
@@ -128,7 +155,7 @@ class cv2_backend:
     def encode(self, frame):
         return cv2.imencode(".jpeg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), 75])[-1].tobytes()
         
-    def split_image(self, image):
+    def split_image(self, image, split=4):
         """
         Splits an image into 16 equal sub-images.
         Args:
@@ -138,11 +165,11 @@ class cv2_backend:
         """
 
         height, width = image.shape[:2]
-        sub_height = height // 4
-        sub_width = width // 4
+        sub_height = height // split
+        sub_width = width // split
         sub_images = []
-        for y in range(4):
-            for x in range(4):
+        for y in range(split):
+            for x in range(split):
                 sub_image = image[y * sub_height:(y + 1) * sub_height, x * sub_width:(x + 1) * sub_width]
                 sub_images.append(sub_image)
 
@@ -157,30 +184,18 @@ class cv2_backend:
         Returns:
             True if changes were detected, False otherwise.
         """
-        # Convert to grayscale
 
-        if sub_image.shape[-1] == 1:
-            print("Image is already grayscale")
-            grayscale_sub_image = sub_image
-        else:
-            grayscale_sub_image = cv2.cvtColor(sub_image, cv2.COLOR_BGR2GRAY)
+        # Optimized grayscale conversion
+        grayscale_sub_image = cv2.merge([sub_image[:, :, 0]])  # Direct memory access
+        grayscale_previous_sub_image = cv2.merge([previous_sub_image[:, :, 0]])
 
-        if previous_sub_image.shape[-1] == 1:
-            grayscale_previous_sub_image = previous_sub_image
-        else:
-            grayscale_previous_sub_image = cv2.cvtColor(previous_sub_image, cv2.COLOR_BGR2GRAY)
+        # Optimized difference calculation using NumPy
+        difference_image = np.abs(grayscale_sub_image.astype(np.int32) - grayscale_previous_sub_image.astype(np.int32))
 
-        # Calculate absolute difference
-        difference_image = cv2.absdiff(grayscale_sub_image, grayscale_previous_sub_image)
+        # Combined thresholding and counting
+        non_zero_pixels = np.count_nonzero(difference_image > 10)
 
-        # Threshold the difference image
-        thresh = cv2.threshold(difference_image, 10, 255, cv2.THRESH_BINARY)[1]
-
-        # Count non-zero pixels in the thresholded image
-        non_zero_pixels = cv2.countNonZero(thresh)
-
-        # If there are enough non-zero pixels, consider it a change
-        return non_zero_pixels >= 100
+        return non_zero_pixels >= 1
     
     def setFrame(self):
         """

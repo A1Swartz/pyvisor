@@ -11,7 +11,7 @@
         "port": {
             "description": "the port of the virtual HID pico",
             "type": "str",
-            "value": "COM8"
+            "value": "COM5"
         }
     },
     "keyboard": {

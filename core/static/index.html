@@ -31,9 +31,6 @@
                     elem.style.transform = "translateX(-250px)";
                     stream.style.transform = "translateX(-100px)"
 
-                    stream.style.width = "85vw"
-                    stream.style.height = "95vh"
-
                     dashHidden = true
                     
 
@@ -42,9 +39,6 @@
                     elem.style.transform = "translateX(0px)";
                     stream.style.transform = "translateX(0px)"
 
-                    stream.style.width = "80vw"
-                    stream.style.height = "95vh"
-
                     dashHidden = false
                 }
             })
@@ -52,17 +46,34 @@
             document.getElementById("settings").addEventListener("click", function() {
                 document.getElementById("stream").src = ""
                 document.getElementById("stream").src = "/settings"
-                document.getElementById("stream").style.width = "82.5vw"
                 selectDash("settings")
             })
 
             document.getElementById("control").addEventListener("click", function() {
                 document.getElementById("stream").src = ""
                 document.getElementById("stream").src = "/stream"
-                document.getElementById("stream").style.width = "80vw"
                 selectDash("control")
             })
         });
+    </script>
+
+    <script type="application/javascript">
+
+        function resizeIFrameToFitContent( iFrame ) {
+        
+            iFrame.width  = iFrame.contentWindow.document.body.scrollWidth;
+            iFrame.height = iFrame.contentWindow.document.body.scrollHeight;
+        }
+        
+        window.addEventListener('DOMContentLoaded', function(e) {
+        
+            // or, to resize all iframes:
+            var iframes = document.querySelectorAll("iframe");
+            for( var i = 0; i < iframes.length; i++) {
+                resizeIFrameToFitContent( iframes[i] );
+            }
+        } );
+        
     </script>
     <style>
 
@@ -94,9 +105,7 @@
             }
 
         .stream {
-            height: 95vh;
-            width: 80vw;
-            
+
             flex-grow: 1; border: none;
             margin: 12px 50px;
             margin-left: 0;
@@ -140,6 +149,27 @@
         .selected-dash-item {
             border-right: 3px solid rgb(44, 0, 127);
             background-color: #282828;
+        }
+
+        @media (max-width:1280px) {
+            .stream {
+                width: 960px;
+                height: 580px;
+            }
+        }
+
+        @media (max-width:1920px) {
+            .stream {
+                width: 1280px;
+                height: 760px;
+            }
+        }
+
+        @media (max-width:2560px) {
+            .stream {
+                width: 1600px;
+                height: 940px;
+            }
         }
     </style>
 </head>
